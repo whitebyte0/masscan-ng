@@ -405,7 +405,7 @@ size_t tcp_create_packet(struct TemplatePacket *tmpl, const ipaddress *ip_them,
     unsigned ip_id = ip_them->ipv4 ^ port_them ^ seqno;
     size_t offset_ip = tmpl->ipv4.offset_ip;
     size_t offset_tcp = tmpl->ipv4.offset_tcp;
-    size_t offset_app = tmpl->ipv6.offset_app;
+    size_t offset_app = tmpl->ipv4.offset_app;
     size_t new_length = offset_app + payload_length;
     size_t ip_len = (offset_app - offset_ip) + payload_length;
 
