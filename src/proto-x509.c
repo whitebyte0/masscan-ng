@@ -402,7 +402,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
     switch (state) {
     case ENC_TAG:
       if (px[i] != 0x03) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       state++;
@@ -446,7 +446,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
       break;
     case VERSION0_TAG:
       if (px[i] != 0xa0) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       state++;
@@ -457,7 +457,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
     case EXTENSION_ID_TAG:
     case ALGOID1_TAG:
       if (px[i] != 0x06) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       state++;
@@ -465,7 +465,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
     case VERSION1_TAG:
     case SERIAL_TAG:
       if (px[i] != 0x02) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       x->asn1.u.num = 0;
@@ -566,14 +566,14 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
     case EXTVALUE2_TAG:
     case ALGOID0_TAG:
       if (px[i] != 0x30) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       state++;
       break;
     case EXTENSIONS_A_TAG:
       if (px[i] != 0xa3) {
-        state = ERROR;
+        state = STATE_ERROR;
         continue;
       }
       state++;
