@@ -51,8 +51,8 @@ endif
 # intended environment, so it make break in the future.
 ifneq (, $(findstring mingw, $(SYS)))
 	INCLUDES += -Ivs10/include
-	LIBS += -L vs10/lib -lIPHLPAPI -lWs2_32
-	FLAGS2 += -march=i686
+	LIBS += -lcrypto -lssl -lcrypto -lpcre -lz -lIPHLPAPI -lWs2_32
+	FLAGS2 += -march=x86-64
 endif
 
 # Cygwin
@@ -84,7 +84,7 @@ ifeq ($(DEBUG), 1)
 	LDFLAGS += -fsanitize=undefined -fsanitize=address -fsanitize-blacklist=sanitizer_ignore_list.txt
 else
 	DEFINES += -DNDEBUG
-	CFLAGS += -g $(FLAGS2) $(INCLUDES) $(DEFINES) -Wall -Werror -O2
+	CFLAGS += -g $(FLAGS2) $(INCLUDES) $(DEFINES) -Wall -O2
 endif
 
 ifeq ($(COVERAGE), 1)

@@ -306,7 +306,7 @@ enum X509state {
   ENC_CONTENTS,
 
   PADDING = 254,
-  ERROR = STATE_ASN1_ERROR
+  STATE_ERROR = STATE_ASN1_ERROR
 };
 
 /****************************************************************************
@@ -841,7 +841,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
 
     case PUBKEY0_CONTENTS:
     case ENC_CONTENTS:
-    case ERROR:
+    case STATE_ERROR:
     default:
       ASN1_skip(&x->asn1, &i, length);
       break;
@@ -849,7 +849,7 @@ void x509_decode(struct CertDecode *x, const unsigned char *px, size_t length,
   }
 
   /* Save the state variable and exit */
-  if (x->asn1.state != ERROR)
+  if (x->asn1.state != STATE_ERROR)
     x->asn1.state = (unsigned int)state;
 }
 

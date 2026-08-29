@@ -32,7 +32,7 @@
 static size_t dns_name_skip_validate(const unsigned char *px, size_t offset,
                                      size_t length, size_t name_length) {
 
-  size_t ERROR = length + 1;
+  size_t error = length + 1;
   size_t result = offset + 2;
   size_t recursion = 0;
 
@@ -42,11 +42,11 @@ static size_t dns_name_skip_validate(const unsigned char *px, size_t offset,
 
     /* validate: the eventual uncompressed name will be less than 255 */
     if (name_length >= 255)
-      return ERROR;
+      return error;
 
     /* validate: haven't gone off end of packet */
     if (offset >= length)
-      return ERROR;
+      return error;
 
     /* grab length of next label */
     len = px[offset];
@@ -57,18 +57,18 @@ static size_t dns_name_skip_validate(const unsigned char *px, size_t offset,
     if (len & 0xC0) {
       /* validate: top 2 bits are 11*/
       if ((len & 0xC0) != 0xC0)
-        return ERROR;
+        return error;
 
       /* validate: enough bytes left for 2 byte compression field */
       if (offset + 1 >= length)
-        return ERROR;
+        return error;
 
       /* follow the compression pointer to the next location */
       offset = (px[offset] & 0x3F) << 8 | px[offset + 1];
 
       /* validate: follow a max of 4 links */
       if (++recursion > 4)
-        return ERROR;
+        return error;
     } else {
       /* we have a normal label */
       recursion = 0;

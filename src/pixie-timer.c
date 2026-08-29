@@ -30,7 +30,7 @@
 #endif
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include <Windows.h>
 
 LARGE_INTEGER getFILETIMEoffset(void) {
