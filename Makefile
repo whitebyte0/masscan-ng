@@ -49,7 +49,7 @@ endif
 # day I acccidentally typed 'make' instead of 'git, and felt compelled
 # to then fix all the errors, so this kinda works now. It's not the
 # intended environment, so it make break in the future.
-ifneq (, $(findstring mingw, $(SYS)))
+ifneq (, $(findstring w64, $(SYS)))
 	INCLUDES += -Ivs10/include
 	LIBS += -lcrypto -lssl -lcrypto -lpcre -lz -lIPHLPAPI -lWs2_32
 	FLAGS2 += -march=x86-64
