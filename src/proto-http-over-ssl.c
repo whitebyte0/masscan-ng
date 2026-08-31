@@ -601,6 +601,17 @@ static void *ssl_init(struct Banner1 *banner1) {
     LOG(LEVEL_WARNING, "SSL_CTX_set_ciphersuites error %d\n", res);
   }
 
+  /* Since OpenSSL 3.5 the default group list starts with X25519MLKEM768,
+   * whose key_share alone is ~1200 bytes. The TCP stack transmits the
+   * hello as a single unsegmented Ethernet frame, so on a 1500-MTU link
+   * an oversized hello is silently dropped and the handshake never
+   * starts. Replace the default list with classic groups so the whole
+   * ClientHello stays well under the MSS. */
+  res = SSL_CTX_set1_groups_list(ctx, "X25519:P-256:P-384:P-521");
+  if (res != 1) {
+    LOG(LEVEL_WARNING, "SSL_CTX_set1_groups_list error %d\n", res);
+  }
+
   if (banner1->is_capture_key) {
     SSL_CTX_set_keylog_callback(ctx, ssl_keylog_callback);
   }
@@ -850,6 +861,14 @@ static void ssl_transmit_hello(const struct Banner1 *banner1,
 
   pstate->sub.ssl_dynamic.handshake_state =
       SSL_get_state(pstate->sub.ssl_dynamic.ssl);
+  if (offset > 1400) {
+    /* one Ethernet frame can carry ~1440 bytes of TCP payload on a
+     * 1500-MTU link, and the TCP stack never segments */
+    LOG(LEVEL_WARNING,
+        "[ssl_transmit_hello]SSL flight %" PRIuPTR " bytes exceeds a single "
+        "TCP segment, it will likely be dropped on 1500-MTU links\n",
+        offset);
+  }
   tcp_transmit(more, pstate->sub.ssl_dynamic.data, offset, 0);
   return;
 error1:
