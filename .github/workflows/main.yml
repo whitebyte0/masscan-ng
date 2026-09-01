@@ -9,73 +9,80 @@ on:
 
 jobs:
   lint_code_style:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install clang
-        run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal main'
-          sudo apt-get install clang-format
+        uses: actions/checkout@v4
+
+      - name: Install Clang
+        uses: llvm-actions/get-llvm-action@v2
+        with:
+          version: "14"
+
       - name: Lint the code
         run: |
           clang-format --version
           clang-format --Werror --verbose --dry-run --style=LLVM ./src/*
-  
+
   lint_clang:
     needs: lint_code_style
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install clang
-        run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal main'
-          sudo apt-get install clang clang-tools
+        uses: actions/checkout@v4
+
+      - name: Install Clang & Tools
+        uses: llvm-actions/get-llvm-action@v2
+        with:
+          version: "14"
+
       - name: Lint the code
         run: |
           export CC=clang
           clang --version
           scan-build --status-bugs -v -o ./analysis_result/ make
-      - name: Upload
-        uses: actions/upload-artifact@v2
+
+      - name: Upload Analysis Artifact
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: analysis_result_clang
           path: ./analysis_result/*
-  
+
   test_linux:
     needs: lint_clang
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install clang
-        run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal main'
-          sudo apt-get install clang clang-tools
+        uses: actions/checkout@v4
+
+      - name: Install Clang
+        uses: llvm-actions/get-llvm-action@v2
+        with:
+          version: "14"
+
       - name: Build and Test code
         run: |
           export CC=clang
           clang --version
           make DEBUG=1 regress
-  
+
   sonarcloud:
     name: SonarCloud
     needs: test_linux
     environment: main
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install LLVM
-        run: |
-          sudo apt-get install llvm clang clang-tools
+
+      - name: Install LLVM & Clang Tools
+        uses: llvm-actions/get-llvm-action@v2
+        with:
+          version: "14"
+
       - name: Set environment for Sonar Scanner
         run: |
           export SONAR_SCANNER_VERSION=4.5.0.2216
@@ -87,111 +94,124 @@ jobs:
           echo "SONAR_SCANNER_VERSION=$SONAR_SCANNER_VERSION" >> $GITHUB_ENV
           echo "SONAR_SCANNER_HOME=$SONAR_SCANNER_HOME" >> $GITHUB_ENV
           echo "SONAR_SCANNER_OPTS=$SONAR_SCANNER_OPTS" >> $GITHUB_ENV
+
       - name: Install Sonar Scanner
         run: |
           curl --create-dirs -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux.zip
           unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
           curl --create-dirs -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
-      - name: Restore Sonar Analysis
+
+      - name: Restore Sonar Analysis Cache
         id: cache-sonar-analysis
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: $HOME/.sonarcache
           key: ${{ runner.os }}-sonar-analysis-${{ github.ref }}
+
       - name: Execute the Build Wrapper
         run: |
           export CC=clang
           clang --version
           build-wrapper-linux-x86-64 --out-dir bw-output make COVERAGE=1
+
       - name: Coverage
         run: |
           LLVM_PROFILE_FILE="masscan-ng.profraw" ./bin/masscan-ng --selftest
           llvm-profdata merge -sparse masscan-ng.profraw -o masscan-ng.profdata
           llvm-cov show ./bin/masscan-ng -instr-profile=masscan-ng.profdata > coverage.txt
+
       - name: Execute the SonarScanner
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sonar-scanner
-          -Dsonar.organization=bi-zone
-          -Dsonar.projectKey=bi-zone_masscan-ng
-          -Dsonar.sources=.
-          -Dsonar.cfamily.build-wrapper-output=bw-output
-          -Dsonar.host.url=https://sonarcloud.io
-          -Dsonar.cfamily.threads=2
-          -Dsonar.cfamily.cache.path=$HOME/.sonarcache
-          -Dsonar.cfamily.cache.enabled=true
-          -Dsonar.cfamily.llvm-cov.reportPath=coverage.txt
-  
+        run: |
+          sonar-scanner \
+            -Dsonar.organization=bi-zone \
+            -Dsonar.projectKey=bi-zone_masscan-ng \
+            -Dsonar.sources=. \
+            -Dsonar.cfamily.build-wrapper-output=bw-output \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.cfamily.threads=2 \
+            -Dsonar.cfamily.cache.path=$HOME/.sonarcache \
+            -Dsonar.cfamily.cache.enabled=true \
+            -Dsonar.cfamily.llvm-cov.reportPath=coverage.txt
+
   codeql:
     name: CodeQL
     needs: test_linux
     environment: main
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v1
+        uses: github/codeql-action/init@v3
         with:
           languages: cpp
+
       - name: Build code
         run: |
           export CC=clang
           clang --version
           make
+
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v1
-  
+        uses: github/codeql-action/analyze@v3
+
   build_mac:
     needs: [lint_code_style, lint_clang, test_linux]
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+
       - name: Install dependencies
-        run: |
-          brew install pcre
+        run: brew install pcre
+
       - name: Build code
         run: |
           export CC=clang
           clang --version
           make
+
       - name: Selftest
-        run:
-          ./bin/masscan-ng --selftest
-      - name: Upload
-        uses: actions/upload-artifact@v2
+        run: ./bin/masscan-ng --selftest
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: masscan-ng_mac
           path: ./bin/masscan-ng
-  
+
   build_linux:
     needs: [lint_code_style, lint_clang, test_linux]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install clang
-        run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal main'
-          sudo apt-get install clang clang-tools
+        uses: actions/checkout@v4
+
+      - name: Install Clang
+        uses: llvm-actions/get-llvm-action@v2
+        with:
+          version: "14"
+
       - name: Build code
         run: |
           export CC=clang
           clang --version
           make
+
       - name: Selftest
-        run:
-          ./bin/masscan-ng --selftest
-      - name: Upload
-        uses: actions/upload-artifact@v2
+        run: ./bin/masscan-ng --selftest
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: masscan-ng
+          name: masscan-ng_linux
           path: ./bin/masscan-ng
-  
+
   build_windows:
     needs: [lint_code_style, lint_clang, test_linux]
     runs-on: windows-latest
@@ -202,27 +222,25 @@ jobs:
         include:
           - platform: x64
             arch: x64
-          # - platform: Win32
-          #   arch: x86
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      # This not work for nmake
-      # - name: Add msbuild to PATH
-      #   uses: microsoft/setup-msbuild@v1
+        uses: actions/checkout@v4
+
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
+
       - name: Cache Externals
         id: cache-externals
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .\externals\${{ matrix.platform }}\Release
           key: ${{ runner.os }}-externals-${{ matrix.platform }}-release
+
       - name: Install OpenSSL
         if: steps.cache-externals.outputs.cache-hit != 'true'
-        run: | 
+        run: |
           curl -fsSL https://github.com/openssl/openssl/archive/OpenSSL_1_1_1i.zip -o OpenSSL_1_1_1i.zip
           7z x OpenSSL_1_1_1i.zip
           mkdir .\openssl-OpenSSL_1_1_1i\${{ matrix.platform }}\Release
@@ -235,6 +253,7 @@ jobs:
           xcopy libcrypto.lib ..\..\..\externals\${{ matrix.platform }}\Release\shared_lib\
           xcopy libssl-1_1.dll ..\..\..\externals\${{ matrix.platform }}\Release\bin\
           xcopy libcrypto-1_1.dll ..\..\..\externals\${{ matrix.platform }}\Release\bin\
+
       - name: Install PCRE
         if: steps.cache-externals.outputs.cache-hit != 'true'
         run: |
@@ -246,17 +265,19 @@ jobs:
           xcopy pcre.h ..\externals\${{ matrix.platform }}\Release\include\
           xcopy .\Release\pcre.lib ..\externals\${{ matrix.platform }}\Release\shared_lib\
           xcopy .\Release\pcre.dll ..\externals\${{ matrix.platform }}\Release\bin\
+
       - name: Build code
         run: msbuild .\vs17\masscan-ng.sln /property:Configuration=${{ matrix.configuration }} /property:Platform=${{ matrix.platform }} /m
+
       - name: Selftest
         run: |
           xcopy .\externals\${{ matrix.platform }}\Release\bin\libssl-1_1.dll .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\
           xcopy .\externals\${{ matrix.platform }}\Release\bin\libcrypto-1_1.dll .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\
           xcopy .\externals\${{ matrix.platform }}\Release\bin\pcre.dll .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\
           .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\masscan-ng.exe --selftest
-      - name: Upload
-        uses: actions/upload-artifact@v2
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: masscan-ng_win
-          path: |
-            .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\
+          path: .\bin\${{ matrix.platform }}\${{ matrix.configuration }}\
