@@ -1,7 +1,6 @@
 # Release builder for whitebyte0/masscan-ng.
 #
-# Copy to .github/workflows/release.yml in the masscan-ng repo, then publish
-# a release by pushing a tag:
+# Publish a release by pushing a tag:
 #
 #   git tag v1.1 && git push origin v1.1
 #
@@ -18,6 +17,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,18 +27,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # full history + tags so the Makefile's `git describe --tags`
+          # embeds the real version in the binary
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # pcre.h is PCRE1 -> libpcre3-dev (libpcre2-dev ships pcre2.h)
+          sudo apt-get install -y build-essential libpcre3-dev libssl-dev zlib1g-dev
 
       - name: Build
         run: make -j"$(nproc)"
 
       - name: Stage asset
-        run: |
-          # masscan's Makefile leaves the binary in bin/ or src/ depending on
-          # version; find whichever appeared and stage it under the asset name.
-          for cand in bin/masscan src/masscan masscan; do
-            if [ -f "$cand" ]; then mv "$cand" masscan-linux-amd64; break; fi
-          done
-          [ -f masscan-linux-amd64 ] || { echo "built binary not found" >&2; exit 1; }
+        run: mv bin/masscan-ng masscan-linux-amd64
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
@@ -49,24 +53,28 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: false
-          install: make mingw-w64-x86_64-toolchain
+          install: >-
+            make
+            git
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pcre
+            mingw-w64-x86_64-zlib
 
       - name: Build
         shell: msys2 {0}
         run: make -j"$(nproc)"
 
       - name: Stage asset
-        shell: bash
-        run: |
-          for cand in bin/masscan.exe src/masscan.exe masscan.exe; do
-            if [ -f "$cand" ]; then mv "$cand" masscan-windows-amd64.exe; break; fi
-          done
-          [ -f masscan-windows-amd64.exe ] || { echo "built binary not found" >&2; exit 1; }
+        shell: msys2 {0}
+        run: mv bin/masscan-ng.exe masscan-windows-amd64.exe
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
