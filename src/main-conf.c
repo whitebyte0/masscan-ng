@@ -49,17 +49,115 @@ static struct Range top_ports_sctp[] = {
 
 /***************************************************************************
  ***************************************************************************/
+/***************************************************************************
+ * forward declaration: walks the config-parameter table (defined much
+ * further down in this file) so the help always lists every parameter
+ ***************************************************************************/
+static void print_config_parameter_list(void);
+
 void masscan_usage() {
   printf("usage:\n");
-  printf("masscan -p80,8000-8100 10.0.0.0/8 --rate=10000\n");
+  printf(MASSCAN_NAME " -p80,8000-8100 10.0.0.0/8 --rate=10000\n");
   printf(" scan some web ports on 10.x.x.x at 10kpps\n");
-  printf("masscan --nmap\n");
+  printf(MASSCAN_NAME " -p443 192.168.10.1 --banners --dynamic-ssl=true"
+                      " --capture html\n");
+  printf(" full TLS handshake and grab the HTML page from 192.168.10.1\n");
+  printf(MASSCAN_NAME " --nmap\n");
   printf(" list those options that are compatible with nmap\n");
-  printf("masscan -p80 10.0.0.0/8 --banners -oB <filename>\n");
-  printf(" save results of scan in binary format to <filename>\n");
-  printf("masscan --open --banners --readscan <filename> -oX <savefile>\n");
-  printf(" read binary scan results in <filename> and save them as xml in "
-         "<savefile>\n");
+  printf(MASSCAN_NAME " --echo\n");
+  printf(" dump the current configuration as a config file\n\n");
+
+  printf("TARGETS AND PORTS:\n");
+  printf("  -p, --ports <ports>       ports to scan: -p80 or -p22,80,8000-8100\n");
+  printf("  --tcp-ports <ports>       scan these ports as TCP\n");
+  printf("  --udp-ports <ports>       scan these ports as UDP\n");
+  printf("  --oproto <protocols>      scan other IP protocols (by number)\n");
+  printf("  --exclude-ports <ports>   ports not to scan\n");
+  printf("  --range <ips>             target ranges (usually given as the\n");
+  printf("                            positional arguments instead)\n");
+  printf("  --exclude <ips>           hosts/networks to exclude\n");
+  printf("  --excludefile <file>      exclusion list from file\n");
+  printf("  -iL, --includefile <file> read targets from file\n");
+  printf("  --top-ports <n>           scan the top <n> ports (1000 if N omitted)\n");
+  printf("  --arpscan, --arp          ARP scan of the local network\n");
+  printf("  --ping                    ICMP ping sweep\n\n");
+
+  printf("TIMING AND PERFORMANCE:\n");
+  printf("  --rate, --max-rate <n>    transmit rate in packets/second (default 100)\n");
+  printf("  --wait <secs>             seconds to wait for late replies after\n");
+  printf("                            the scan is done (default 10)\n");
+  printf("  --retries <n>             retransmissions; 0 = send once (default 0)\n");
+  printf("  --connection-timeout <s>  TCP banner connection timeout (default 30)\n");
+  printf("  --hello-timeout <s>       wait before sending a hello (default 2)\n");
+  printf("  --host-timeout <s>        give up on a host after this long\n");
+  printf("  --infinite                keep scanning forever\n");
+  printf("  --shard <x>/<y>           split the scan across instances\n");
+  printf("  --seed <n>                fix the randomization seed\n\n");
+
+  printf("NETWORK AND ADAPTER:\n");
+  printf("  -e, --adapter <iface>     network interface to use\n");
+  printf("  --adapter-ip, -S <ip>     source IP address\n");
+  printf("  --adapter-mac <mac>       source MAC address\n");
+  printf("  --adapter-port, -g <port> source TCP/UDP port (random 40000-59999)\n");
+  printf("  --adapter-vlan, --vlan <id>\n");
+  printf("  --router-mac <mac>        gateway MAC (ARP is used otherwise)\n");
+  printf("  --router-ipv4, --router-ipv6 <ip>\n");
+  printf("  --ttl <n>, --data-length <n>, --mtu <n>\n");
+  printf("  --send-eth                send raw ethernet frames (default)\n");
+  printf("  --send-ip                 send raw IP packets\n");
+  printf("  --bpf <filter>            pcap capture filter for received packets\n");
+  printf("  --iflist                  list interfaces and routes, then exit\n\n");
+
+  printf("BANNER AND SERVICE DETECTION (--banners):\n");
+  printf("  --banners                 grab banners of open services\n");
+  printf("  --dynamic-ssl=true        do a full TLS handshake with OpenSSL;\n");
+  printf("                            required for --capture html over TLS\n");
+  printf("  --dynamic-set-host        set HTTP Host header to the target's IP\n");
+  printf("  --capture <what>          cert | servername | html | heartbleed |\n");
+  printf("                            ticketbleed (repeatable)\n");
+  printf("  --regex <expr>            PCRE; only output records that match\n");
+  printf("  --regex-only-banners      apply --regex to banners only\n");
+  printf("  --http-header Name:value  add/replace an HTTP request header\n");
+  printf("  --http-cookie <cookie>    add an HTTP Cookie header\n");
+  printf("  --http-method, --http-url, --http-version,\n");
+  printf("  --http-host, --http-user-agent, --http-payload\n");
+  printf("  --hello <proto>           ssl | http | smbv1 probe on all ports\n");
+  printf("  --hello-string[port]=<b64> custom probe payload\n");
+  printf("  --hello-file, --hello-timeout <s>\n");
+  printf("  --heartbleed              test for the Heartbleed bug\n");
+  printf("  --ticketbleed             test for the Ticketbleed bug\n");
+  printf("  --nmap-service-probes <file>\n");
+  printf("  --nmap-payloads <file>, --pcap-payloads <file>\n\n");
+
+  printf("OUTPUT:\n");
+  printf("  -oL/-oJ/-oD/-oG/-oB/-oU/-oX <file>\n");
+  printf("                            List/JSON/ndjson/Grepable/Binary/\n");
+  printf("                            Unicornscan/XML output (also -oA all)\n");
+  printf("  --output-format <fmt>, --output-file <file>\n");
+  printf("  --output-filename-ssl-keys <file>  TLS session keys (keylog)\n");
+  printf("  --open                    only show open ports\n");
+  printf("  --append-output           don't clobber output files\n");
+  printf("  --rotate <time>, --rotate-dir <dir>, --rotate-offset <t>,\n");
+  printf("  --rotate-size <bytes>     periodic output file rotation\n");
+  printf("  --stylesheet, --script <file|url>\n");
+  printf("  --redis <ip:port>         publish results to redis\n\n");
+
+  printf("DEBUG AND MISC:\n");
+  printf("  -v, -d                    increase verbosity / debug level\n");
+  printf("  --packet-trace            show all packets sent and received\n");
+  printf("  -c, --config <file>       read a config file\n");
+  printf("  --echo, --echo-all        print the active configuration\n");
+  printf("  --readscan <file>         read results of a binary (-oB) scan\n");
+  printf("  --selftest                run the regression tests\n");
+  printf("  --benchmark               run internal benchmarks\n");
+  printf("  --offline                 parse config but don't transmit\n");
+  printf("  --interactive, --status   keyboard control at runtime (defaults)\n");
+  printf("  -V, --version             print version\n");
+  printf("  -h, --help                this help\n\n");
+
+  print_config_parameter_list();
+
+  printf("\nSEE (" MASSCAN_REPO_LINK ") FOR MORE HELP\n");
   exit(1);
 }
 
@@ -4640,347 +4738,243 @@ struct ConfigParameter {
   CLENUP_PARAMETER cleanup;
   unsigned flags;
   const char *alts[8];
+  const char *desc;
 };
 
 struct ConfigParameter config_parameters[] = {
-    {"resume-index", SET_resume_index, CLEANUP_resume_index, 0, {NULL}},
-    {"resume-count", SET_resume_count, CLEANUP_resume_count, 0, {NULL}},
-    {"seed", SET_seed, CLEANUP_seed, 0, {NULL}},
-    {"arpscan", SET_arpscan, CLEANUP_arpscan, F_BOOL, {"arp", NULL}},
-    {"randomize-hosts",
-     SET_randomize_hosts,
-     CLEANUP_randomize_hosts,
-     F_BOOL,
-     {NULL}},
-    {"rate", SET_rate, CLEANUP_rate, 0, {"max-rate", "min-rate", NULL}},
-    {"tranquility", SET_tranquility, CLEANUP_tranquility, F_BOOL, {NULL}},
-    {"shard", SET_shard, CLEANUP_shard, 0, {"shards", NULL}},
-    {"num-handle-threads",
-     SET_num_handle_threads,
-     CLEANUP_num_handle_threads,
-     0,
-     {NULL}},
-    {"banners",
-     SET_banners,
-     CLEANUP_banners,
-     F_BOOL,
-     {"banner", "nobanners", "nobanner", NULL}},
-    {"dynamic-ssl",
-     SET_dynamic_ssl,
-     CLEANUP_dynamic_ssl,
-     F_BOOL,
-     {"dynamic-ssl", NULL}},
-    {"dynamic-set-host",
-     SET_dynamic_set_host,
-     CLEANUP_dynamic_set_host,
-     F_BOOL,
-     {NULL}},
-    {"regex-only-banners",
-     SET_regex_only_banners,
-     CLEANUP_regex_only_banners,
-     F_BOOL,
-     {NULL}},
-    {"regex", SET_regex, CLEANUP_regex, 0, {"regex", NULL}},
-    {"retries",
-     SET_retries,
-     CLEANUP_retries,
-     0,
-     {"retry", "max-retries", "max-retry", NULL}},
-    {"noreset", SET_noreset, CLEANUP_noreset, F_BOOL, {NULL}},
-    {"nmap-payloads",
-     SET_nmap_payloads,
-     CLEANUP_nmap_payloads,
-     0,
-     {"nmap-payload", NULL}},
-    {"nmap-service-probes",
-     SET_nmap_service_probes,
-     CLEANUP_nmap_service_probes,
-     0,
-     {"nmap-service-probe", NULL}},
-    {"pcap-filename",
-     SET_pcap_filename,
-     CLEANUP_pcap_filename,
-     0,
-     {"pcap", NULL}},
-    {"pcap-payloads",
-     SET_pcap_payloads,
-     CLEANUP_pcap_payloads,
-     0,
-     {"pcap-payload", NULL}},
-    {"hello", SET_hello, CLEANUP_hello, 0, {NULL}},
-    {"hello-file",
-     SET_hello_file,
-     CLEANUP_hello_file,
-     0,
-     {"hello-filename", NULL}},
-    {"hello-string", SET_hello_string, CLEANUP_hello_string, 0, {NULL}},
-    {"hello-timeout", SET_hello_timeout, CLEANUP_hello_timeout, 0, {NULL}},
-    {"http-cookie", SET_http_cookie, CLEANUP_http_cookie, 0, {NULL}},
+    {"resume-index", SET_resume_index, CLEANUP_resume_index, 0, {NULL}, "shard index to resume from (with --resume-count)"},
+    {"resume-count", SET_resume_count, CLEANUP_resume_count, 0, {NULL}, "total shards when resuming (with --resume-index)"},
+    {"seed", SET_seed, CLEANUP_seed, 0, {NULL}, "fix the randomization seed for reproducible scans (default: random)"},
+    {"arpscan", SET_arpscan, CLEANUP_arpscan, F_BOOL, {"arp", NULL}, "scan the local network with ARP instead of ports"},
+    {"randomize-hosts", SET_randomize_hosts, CLEANUP_randomize_hosts, F_BOOL, {NULL}, "randomize the target order (default, always on)"},
+    {"rate", SET_rate, CLEANUP_rate, 0, {"max-rate", "min-rate", NULL}, "transmit rate in packets/second (default 100)"},
+    {"tranquility", SET_tranquility, CLEANUP_tranquility, F_BOOL, {NULL}, "same as --nointeractive --nostatus"},
+    {"shard", SET_shard, CLEANUP_shard, 0, {"shards", NULL}, "scan only shard x of y, e.g. --shard 2/5 (default 1/1)"},
+    {"num-handle-threads", SET_num_handle_threads, CLEANUP_num_handle_threads, 0, {NULL}, "number of receive handler threads (default 1)"},
+    {"banners", SET_banners, CLEANUP_banners, F_BOOL, {"banner", "nobanners", "nobanner", NULL}, "grab banners of open services (TCP/UDP)"},
+    {"dynamic-ssl", SET_dynamic_ssl, CLEANUP_dynamic_ssl, F_BOOL, {"dynamic-ssl", NULL}, "complete TLS handshakes via OpenSSL; needed for --capture html over TLS"},
+    {"dynamic-set-host", SET_dynamic_set_host, CLEANUP_dynamic_set_host, F_BOOL, {NULL}, "set the HTTP Host header to the target's IP (per connection)"},
+    {"regex-only-banners", SET_regex_only_banners, CLEANUP_regex_only_banners, F_BOOL, {NULL}, "apply --regex to banners only, always output status"},
+    {"regex", SET_regex, CLEANUP_regex, 0, {"regex", NULL}, "PCRE: only records matching the expression are output"},
+    {"retries", SET_retries, CLEANUP_retries, 0, {"retry", "max-retries", "max-retry", NULL}, "SYN retransmissions; 0 = send each probe once (default 0)"},
+    {"noreset", SET_noreset, CLEANUP_noreset, F_BOOL, {NULL}, "don't send RST for packets with no matching connection"},
+    {"nmap-payloads", SET_nmap_payloads, CLEANUP_nmap_payloads, 0, {"nmap-payload", NULL}, "nmap-payloads file with UDP probe payloads"},
+    {"nmap-service-probes", SET_nmap_service_probes, CLEANUP_nmap_service_probes, 0, {"nmap-service-probe", NULL}, "nmap-service-probes file with regex probes"},
+    {"pcap-filename", SET_pcap_filename, CLEANUP_pcap_filename, 0, {"pcap", NULL}, "save received packets to this pcap file"},
+    {"pcap-payloads", SET_pcap_payloads, CLEANUP_pcap_payloads, 0, {"pcap-payload", NULL}, "take UDP probe payloads from a pcap capture file"},
+    {"hello", SET_hello, CLEANUP_hello, 0, {NULL}, "force the probe on all ports: ssl|http|smbv1"},
+    {"hello-file", SET_hello_file, CLEANUP_hello_file, 0, {"hello-filename", NULL}, "send this file's contents as the probe payload"},
+    {"hello-string", SET_hello_string, CLEANUP_hello_string, 0, {NULL}, "base64 probe payload per port: hello-string[1234]=<b64>"},
+    {"hello-timeout", SET_hello_timeout, CLEANUP_hello_timeout, 0, {NULL}, "seconds to wait for a server hello before probing (default 2)"},
+    {"http-cookie", SET_http_cookie, CLEANUP_http_cookie, 0, {NULL}, "add this Cookie header to HTTP requests"},
     {"http-header",
      SET_http_header,
      CLEANUP_http_header,
      F_CMPSTART,
-     {"http-field", NULL}},
-    {"http-method", SET_http_method, CLEANUP_http_method, 0, {NULL}},
-    {"http-version", SET_http_version, CLEANUP_http_version, 0, {NULL}},
-    {"http-url", SET_http_url, CLEANUP_http_url, 0, {"http-uri", NULL}},
-    {"http-user-agent",
-     SET_http_user_agent,
-     CLEANUP_http_user_agent,
-     0,
-     {"http-useragent", NULL}},
-    {"http-host", SET_http_host, CLEANUP_http_host, 0, {NULL}},
-    {"http-payload", SET_http_payload, CLEANUP_http_payload, 0, {NULL}},
-    {"ndjson-status",
-     SET_status_ndjson,
-     CLEANUP_status_ndjson,
-     F_BOOL,
-     {"status-ndjson", NULL}},
-    {"json-status",
-     SET_status_json,
-     CLEANUP_status_json,
-     F_BOOL,
-     {"status-json", NULL}},
-    {"min-packet", SET_min_packet, CLEANUP_min_packet, 0, {"min-pkt", NULL}},
-    {"capture", SET_capture, CLEANUP_capture, 0, {"nocapture", NULL}},
-    {"SPACE", SET_space, CLEANUP_space, 0, {NULL}},
-    {"output-filename",
-     SET_output_filename,
-     CLEANUP_output_filename,
-     0,
-     {"output-file", NULL}},
-    {"output-filename-ssl-keys",
-     SET_output_filename_ssl_keys,
-     CLEANUP_output_filename_ssl_keys,
-     0,
-     {"output-file-ssl-keys", NULL}},
-    {"output-format", SET_output_format, CLEANUP_output_format, 0, {NULL}},
-    {"output-show",
-     SET_output_show,
-     CLEANUP_output_show,
-     0,
-     {"output-status", "show", NULL}},
-    {"output-noshow",
-     SET_output_noshow,
-     CLEANUP_output_noshow,
-     0,
-     {"noshow", NULL}},
-    {"output-show-open",
-     SET_output_show_open,
-     CLEANUP_output_show_open,
-     F_BOOL,
-     {"open", "open-only", NULL}},
-    {"output-append",
-     SET_output_append,
-     CLEANUP_output_append,
-     F_BOOL,
-     {"append-output", NULL}},
-    {"rotate",
-     SET_rotate_time,
-     CLEANUP_rotate_time,
-     0,
-     {"output-rotate", "rotate-output", "rotate-time", NULL}},
-    {"rotate-dir",
-     SET_rotate_directory,
-     CLEANUP_rotate_directory,
-     0,
-     {"output-rotate-dir", "rotate-directory", NULL}},
-    {"rotate-offset",
-     SET_rotate_offset,
-     CLEANUP_rotate_offset,
-     0,
-     {"output-rotate-offset", NULL}},
-    {"rotate-size",
-     SET_rotate_filesize,
-     CLEANUP_rotate_filesize,
-     0,
-     {"output-rotate-filesize", "rotate-filesize", NULL}},
-    {"stylesheet", SET_output_stylesheet, CLEANUP_output_stylesheet, 0, {NULL}},
-    {"script", SET_script, CLEANUP_script, 0, {NULL}},
-    {"config", SET_config, CLEANUP_config, 0, {"conf", NULL}},
-    {"adapter", SET_adapter, CLEANUP_adapter, 0, {"if", "interface", NULL}},
-    {"adapter-ip",
-     SET_adapter_ip,
-     CLEANUP_adapter_ip,
-     0,
-     {"source-ip", "source-address", "spoof-ip", "spoof-address", "src-ip",
-      NULL}},
-    {"adapter-port",
-     SET_adapter_port,
-     CLEANUP_adapter_port,
-     0,
-     {"source-port", "spoof-port", "src-port", "sourceport", NULL}},
-    {"adapter-mac",
-     SET_adapter_mac,
-     CLEANUP_adapter_mac,
-     0,
-     {"source-mac", "spoof-mac", "src-mac", NULL}},
-    {"router-mac",
-     SET_router_mac,
-     CLEANUP_router_mac,
-     0,
-     {"router", "dest-mac", "dst-mac", "destination-mac", "target-mac", NULL}},
-    {"router-mac-ipv4",
-     SET_router_mac_ipv4,
-     CLEANUP_router_mac_ipv4,
-     0,
-     {"router-ipv4", NULL}},
-    {"router-mac-ipv6",
-     SET_router_mac_ipv6,
-     CLEANUP_router_mac_ipv6,
-     0,
-     {"router-ipv6", NULL}},
-    {"router-ip", SET_router_ip, CLEANUP_router_ip, 0, {NULL}},
-    {"udp-ports", SET_udp_ports, CLEANUP_udp_ports, 0, {"udp-port", NULL}},
-    {"oprotos", SET_oprotos, CLEANUP_oprotos, 0, {"oproto", NULL}},
-    {"tcp-ports", SET_tcp_ports, CLEANUP_tcp_ports, 0, {"tcp-port", NULL}},
-    {"ports",
-     SET_ports,
-     CLEANUP_ports,
-     0,
-     {"port", "dest-port", "dst-port", "destination-port", "target-port",
-      NULL}},
-    {"banner-types",
-     SET_banner_types,
-     CLEANUP_banner_types,
-     0,
-     {"banner-type", "banner-apps", "banner-app", NULL}},
-    {"exclude-ports",
-     SET_exclude_ports,
-     CLEANUP_exclude_ports,
-     0,
-     {"exclude-port", NULL}},
-    {"bpf", SET_bpf, CLEANUP_bpf, 0, {NULL}},
-    {"ping", SET_ping, CLEANUP_ping, F_BOOL, {"ping-sweep", NULL}},
-    {"range",
-     SET_range,
-     CLEANUP_range,
-     0,
-     {"ranges", "ip", "ipv4", "dest-ip", "dst-ip", "destination-ip",
-      "target-ip", NULL}},
-    {"exclude",
-     SET_exclude,
-     CLEANUP_exclude,
-     0,
-     {"exclude-range", "exclude-ranges", "exclude-ip", "exclude-ipv4", NULL}},
-    {"badsum", SET_badsum, CLEANUP_badsum, F_BOOL, {NULL}},
-    {"backtrace", NULL, NULL, F_BOOL, {"nobacktrace", NULL}},
-    {"banner1", SET_test_banner1, CLEANUP_test_banner1, 0, {NULL}},
-    {"blackrock-rounds",
-     SET_blackrock_rounds,
-     CLEANUP_blackrock_rounds,
-     0,
-     {NULL}},
-    {"connection-timeout",
-     SET_connection_timeout,
-     CLEANUP_connection_timeout,
-     0,
-     {"tcp-timeout", NULL}},
-    {"datadir", SET_datadir, CLEANUP_datadir, 0, {NULL}},
-    {"data-length", SET_data_length, CLEANUP_data_length, 0, {NULL}},
-    {"debug", SET_debug, CLEANUP_debug, 0, {NULL}},
-    {"dns-servers", SET_dns_servers, CLEANUP_dns_servers, 0, {NULL}},
-    {"echo", SET_echo, CLEANUP_echo, F_BOOL, {"echo-all", NULL}},
-    {"excludefile", SET_excludefile, CLEANUP_excludefile, 0, {NULL}},
-    {"heartbleed", SET_heartbleed, CLEANUP_heartbleed, F_BOOL, {NULL}},
-    {"ticketbleed", SET_ticketbleed, CLEANUP_ticketbleed, F_BOOL, {NULL}},
-    {"host-timeout", SET_host_timeout, CLEANUP_host_timeout, 0, {NULL}},
-    {"iflist", SET_iflist, CLEANUP_iflist, F_BOOL, {NULL}},
-    {"includefile", SET_includefile, CLEANUP_includefile, 0, {NULL}},
-    {"infinite", SET_infinite, CLEANUP_infinite, F_BOOL, {NULL}},
-    {"interactive",
-     SET_interactive,
-     CLEANUP_interactive,
-     F_BOOL,
-     {"nointeractive", NULL}},
-    {"status", SET_status, CLEANUP_status, F_BOOL, {"nostatus", NULL}},
-    {"ip-options", SET_ip_options, CLEANUP_ip_options, 0, {NULL}},
-    {"log-errors", SET_log_errors, CLEANUP_log_errors, F_BOOL, {NULL}},
-    {"min-hostgroup",
-     SET_hostgroup,
-     CLEANUP_hostgroup,
-     0,
-     {"max-hostgroup", NULL}},
-    {"min-parallelism",
-     SET_parallelism,
-     CLEANUP_parallelism,
-     0,
-     {"max-parallelism", NULL}},
-    {"min-rtt-timeout",
-     SET_rtt_timeout,
-     CLEANUP_rtt_timeout,
-     0,
-     {"max-rtt-timeout", "initial-rtt-timeout", NULL}},
-    {"mtu", SET_mtu, CLEANUP_mtu, 0, {NULL}},
-    {"nmap", SET_nmap, CLEANUP_nmap, F_BOOL, {NULL}},
-    {"offline",
-     SET_offline,
-     CLEANUP_offline,
-     F_BOOL,
-     {"notransmit", "nosend", "dry-run", NULL}},
-    {"osscan-limit", SET_osscan_limit, CLEANUP_osscan_limit, F_BOOL, {NULL}},
-    {"osscan-guess", SET_osscan_guess, CLEANUP_osscan_guess, F_BOOL, {NULL}},
-    {"packet-trace",
-     SET_packet_trace,
-     CLEANUP_packet_trace,
-     F_BOOL,
-     {"trace-packet", NULL}},
-    {"privileged",
-     SET_privileged,
-     CLEANUP_privileged,
-     F_BOOL,
-     {"unprivileged", NULL}},
-    {"pfring", SET_pfring, CLEANUP_pfring, F_BOOL, {NULL}},
-    {"port-ratio", SET_port_ratio, CLEANUP_port_ratio, 0, {NULL}},
-    {"readrange",
-     SET_readrange,
-     CLEANUP_readrange,
-     F_BOOL,
-     {"read-range", "read-ranges", "readranges", NULL}},
-    {"reason", SET_reason, CLEANUP_reason, F_BOOL, {NULL}},
-    {"redis", SET_redis, CLEANUP_redis, 0, {NULL}},
-    {"release-memory",
-     SET_release_memory,
-     CLEANUP_release_memory,
-     F_BOOL,
-     {NULL}},
-    {"resume", SET_resume, CLEANUP_resume, 0, {NULL}},
-    {"vuln", SET_vuln, CLEANUP_vuln, 0, {NULL}},
-    {"scan-delay",
-     SET_scan_delay,
-     CLEANUP_scan_delay,
-     0,
-     {"max-scan-delay", NULL}},
-    {"scanflags", SET_scanflags, CLEANUP_scanflags, 0, {NULL}},
-    {"sendq", SET_sendq, CLEANUP_sendq, F_BOOL, {"sendqueue", NULL}},
-    {"send-eth", SET_send_eth, CLEANUP_send_eth, F_BOOL, {NULL}},
-    {"send-ip", SET_send_ip, CLEANUP_send_ip, F_BOOL, {NULL}},
-    {"selftest",
-     SET_selftest,
-     CLEANUP_selftest,
-     F_BOOL,
-     {"self-test", "regress", NULL}},
-    {"benchmark", SET_benchmark, CLEANUP_benchmark, F_BOOL, {NULL}},
-    {"no-stylesheet", SET_no_stylesheet, CLEANUP_no_stylesheet, F_BOOL, {NULL}},
-    {"system-dns", SET_system_dns, CLEANUP_system_dns, F_BOOL, {NULL}},
-    {"top-ports", SET_top_ports, CLEANUP_top_ports, 0, {NULL}},
-    {"traceroute", SET_traceroute, CLEANUP_traceroute, F_BOOL, {NULL}},
-    {"test", SET_test, CLEANUP_test, 0, {"notest", NULL}},
-    {"ttl", SET_ttl, CLEANUP_ttl, 0, {NULL}},
-    {"version", SET_version, CLEANUP_version, F_BOOL, {NULL}},
-    {"version-intensity",
-     SET_version_intensity,
-     CLEANUP_version_intensity,
-     F_BOOL,
-     {NULL}},
-    {"version-light", SET_version_light, CLEANUP_version_light, F_BOOL, {NULL}},
-    {"version-all", SET_version_all, CLEANUP_version_all, F_BOOL, {NULL}},
-    {"version-trace", SET_version_trace, CLEANUP_version_trace, F_BOOL, {NULL}},
-    {"vlan", SET_vlan, CLEANUP_vlan, 0, {"adapter-vlan", NULL}},
-    {"wait", SET_wait, CLEANUP_wait, 0, {NULL}},
-    {"webxml", SET_webxml, CLEANUP_webxml, F_BOOL, {NULL}},
-    {"SPACE", SET_space, CLEANUP_space, 0, {NULL}},
+     {"http-field", NULL},
+     "add or replace an HTTP request header: --http-header Name:value"},
+    {"http-method", SET_http_method, CLEANUP_http_method, 0, {NULL}, "HTTP request method (default GET)"},
+    {"http-version", SET_http_version, CLEANUP_http_version, 0, {NULL}, "HTTP request version (default HTTP/1.1)"},
+    {"http-url", SET_http_url, CLEANUP_http_url, 0, {"http-uri", NULL}, "HTTP request URL (default /)"},
+    {"http-user-agent", SET_http_user_agent, CLEANUP_http_user_agent, 0, {"http-useragent", NULL}, "User-Agent header for HTTP requests"},
+    {"http-host", SET_http_host, CLEANUP_http_host, 0, {NULL}, "Host header for HTTP requests"},
+    {"http-payload", SET_http_payload, CLEANUP_http_payload, 0, {NULL}, "replace the entire HTTP request with this payload"},
+    {"ndjson-status", SET_status_ndjson, CLEANUP_status_ndjson, F_BOOL, {"status-ndjson", NULL}, "emit status records into the ndjson/json output"},
+    {"json-status", SET_status_json, CLEANUP_status_json, F_BOOL, {"status-json", NULL}, "emit status records into the JSON output"},
+    {"min-packet", SET_min_packet, CLEANUP_min_packet, 0, {"min-pkt", NULL}, "pad packets to at least this size (default 60)"},
+    {"capture", SET_capture, CLEANUP_capture, 0, {"nocapture", NULL}, "capture extra banner data: cert|servername|html|heartbleed|ticketbleed (cert is on by default)"},
+    {"SPACE", SET_space, CLEANUP_space, 0, {NULL}, "internal: positional targets in config files"},
+    {"output-filename", SET_output_filename, CLEANUP_output_filename, 0, {"output-file", NULL}, "write results to this file"},
+    {"output-filename-ssl-keys", SET_output_filename_ssl_keys, CLEANUP_output_filename_ssl_keys, 0, {"output-file-ssl-keys", NULL}, "write TLS session keys here (keylog format)"},
+    {"output-format", SET_output_format, CLEANUP_output_format, 0, {NULL}, "binary|list|unicornscan|json|ndjson|grepable|xml (default xml)"},
+    {"output-show", SET_output_show, CLEANUP_output_show, 0, {"output-status", "show", NULL}, "what to report: open|all|host|none (default open)"},
+    {"output-noshow", SET_output_noshow, CLEANUP_output_noshow, 0, {"noshow", NULL}, "hide items: open|all|host"},
+    {"output-show-open", SET_output_show_open, CLEANUP_output_show_open, F_BOOL, {"open", "open-only", NULL}, "report only open ports"},
+    {"output-append", SET_output_append, CLEANUP_output_append, F_BOOL, {"append-output", NULL}, "append to output files instead of clobbering"},
+    {"rotate", SET_rotate_time, CLEANUP_rotate_time, 0, {"output-rotate", "rotate-output", "rotate-time", NULL}, "rotate output files after this interval, e.g. 10m, 1h (default: off)"},
+    {"rotate-dir", SET_rotate_directory, CLEANUP_rotate_directory, 0, {"output-rotate-dir", "rotate-directory", NULL}, "directory for rotated output files"},
+    {"rotate-offset", SET_rotate_offset, CLEANUP_rotate_offset, 0, {"output-rotate-offset", NULL}, "time offset for the rotation clock"},
+    {"rotate-size", SET_rotate_filesize, CLEANUP_rotate_filesize, 0, {"output-rotate-filesize", "rotate-filesize", NULL}, "rotate output files after this many bytes"},
+    {"stylesheet", SET_output_stylesheet, CLEANUP_output_stylesheet, 0, {NULL}, "XSL stylesheet referenced by XML output"},
+    {"script", SET_script, CLEANUP_script, 0, {NULL}, "Lua script file for the scripting engine"},
+    {"config", SET_config, CLEANUP_config, 0, {"conf", NULL}, "read options from this config file"},
+    {"adapter", SET_adapter, CLEANUP_adapter, 0, {"if", "interface", NULL}, "network interface to transmit on"},
+    {"adapter-ip", SET_adapter_ip, CLEANUP_adapter_ip, 0, {"source-ip", "source-address", "spoof-ip", "spoof-address", "src-ip", NULL}, "source IP address"},
+    {"adapter-port", SET_adapter_port, CLEANUP_adapter_port, 0, {"source-port", "spoof-port", "src-port", "sourceport", NULL}, "source TCP/UDP port (default: one random port in 40000-59999)"},
+    {"adapter-mac", SET_adapter_mac, CLEANUP_adapter_mac, 0, {"source-mac", "spoof-mac", "src-mac", NULL}, "source MAC address"},
+    {"router-mac", SET_router_mac, CLEANUP_router_mac, 0, {"router", "dest-mac", "dst-mac", "destination-mac", "target-mac", NULL}, "gateway MAC address (otherwise resolved with ARP)"},
+    {"router-mac-ipv4", SET_router_mac_ipv4, CLEANUP_router_mac_ipv4, 0, {"router-ipv4", NULL}, "gateway MAC for IPv4 targets"},
+    {"router-mac-ipv6", SET_router_mac_ipv6, CLEANUP_router_mac_ipv6, 0, {"router-ipv6", NULL}, "gateway MAC for IPv6 targets"},
+    {"router-ip", SET_router_ip, CLEANUP_router_ip, 0, {NULL}, "gateway IP address"},
+    {"udp-ports", SET_udp_ports, CLEANUP_udp_ports, 0, {"udp-port", NULL}, "ports to scan as UDP"},
+    {"oprotos", SET_oprotos, CLEANUP_oprotos, 0, {"oproto", NULL}, "IP protocol numbers to scan (non-TCP/UDP)"},
+    {"tcp-ports", SET_tcp_ports, CLEANUP_tcp_ports, 0, {"tcp-port", NULL}, "ports to scan as TCP"},
+    {"ports", SET_ports, CLEANUP_ports, 0, {"port", "dest-port", "dst-port", "destination-port", "target-port", NULL}, "ports to scan: 80,443,8000-8100"},
+    {"banner-types", SET_banner_types, CLEANUP_banner_types, 0, {"banner-type", "banner-apps", "banner-app", NULL}, "report banners only for these app protocols"},
+    {"exclude-ports", SET_exclude_ports, CLEANUP_exclude_ports, 0, {"exclude-port", NULL}, "ports to exclude from the scan"},
+    {"bpf", SET_bpf, CLEANUP_bpf, 0, {NULL}, "BPF filter applied to received packets"},
+    {"ping", SET_ping, CLEANUP_ping, F_BOOL, {"ping-sweep", NULL}, "send ICMP echo requests instead of a port scan"},
+    {"range", SET_range, CLEANUP_range, 0, {"ranges", "ip", "ipv4", "dest-ip", "dst-ip", "destination-ip", "target-ip", NULL}, "IP address ranges to scan (same as positional targets)"},
+    {"exclude", SET_exclude, CLEANUP_exclude, 0, {"exclude-range", "exclude-ranges", "exclude-ip", "exclude-ipv4", NULL}, "targets to exclude from the scan"},
+    {"badsum", SET_badsum, CLEANUP_badsum, F_BOOL, {NULL}, "send packets with deliberately bad checksums"},
+    {"backtrace", NULL, NULL, F_BOOL, {"nobacktrace", NULL}, "print a backtrace on crash (default on)"},
+    {"banner1", SET_test_banner1, CLEANUP_test_banner1, 0, {NULL}, "run the banner1 selftest for a protocol, then exit"},
+    {"blackrock-rounds", SET_blackrock_rounds, CLEANUP_blackrock_rounds, 0, {NULL}, "rounds in the address shuffle (default 14)"},
+    {"connection-timeout", SET_connection_timeout, CLEANUP_connection_timeout, 0, {"tcp-timeout", NULL}, "seconds before a banner connection is dropped (default 30)"},
+    {"datadir", SET_datadir, CLEANUP_datadir, 0, {NULL}, "data directory for nmap-service-probes files"},
+    {"data-length", SET_data_length, CLEANUP_data_length, 0, {NULL}, "pad packets with this many extra bytes"},
+    {"debug", SET_debug, CLEANUP_debug, 0, {NULL}, "debug type: if|iflist|<level 0-9>"},
+    {"dns-servers", SET_dns_servers, CLEANUP_dns_servers, 0, {NULL}, "nmap compat: ignored, DNS is never used"},
+    {"echo", SET_echo, CLEANUP_echo, F_BOOL, {"echo-all", NULL}, "print the current configuration as a config file and exit"},
+    {"excludefile", SET_excludefile, CLEANUP_excludefile, 0, {NULL}, "file with target ranges to exclude"},
+    {"heartbleed", SET_heartbleed, CLEANUP_heartbleed, F_BOOL, {NULL}, "check targets for the Heartbleed vulnerability (TLS)"},
+    {"ticketbleed", SET_ticketbleed, CLEANUP_ticketbleed, F_BOOL, {NULL}, "check targets for the Ticketbleed vulnerability (TLS)"},
+    {"host-timeout", SET_host_timeout, CLEANUP_host_timeout, 0, {NULL}, "give up on a host after this many seconds"},
+    {"iflist", SET_iflist, CLEANUP_iflist, F_BOOL, {NULL}, "list interfaces and routes, then exit"},
+    {"includefile", SET_includefile, CLEANUP_includefile, 0, {NULL}, "file with target ranges to scan (-iL)"},
+    {"infinite", SET_infinite, CLEANUP_infinite, F_BOOL, {NULL}, "restart the scan forever when done"},
+    {"interactive", SET_interactive, CLEANUP_interactive, F_BOOL, {"nointeractive", NULL}, "runtime keyboard control (default on)"},
+    {"status", SET_status, CLEANUP_status, F_BOOL, {"nostatus", NULL}, "runtime status lines (default on)"},
+    {"ip-options", SET_ip_options, CLEANUP_ip_options, 0, {NULL}, "IP options for outgoing IPv4 packets"},
+    {"log-errors", SET_log_errors, CLEANUP_log_errors, F_BOOL, {NULL}, "nmap compat: accepted, not implemented"},
+    {"min-hostgroup", SET_hostgroup, CLEANUP_hostgroup, 0, {"max-hostgroup", NULL}, "nmap compat: ignored"},
+    {"min-parallelism", SET_parallelism, CLEANUP_parallelism, 0, {"max-parallelism", NULL}, "nmap compat: ignored"},
+    {"min-rtt-timeout", SET_rtt_timeout, CLEANUP_rtt_timeout, 0, {"max-rtt-timeout", "initial-rtt-timeout", NULL}, "nmap compat: ignored"},
+    {"mtu", SET_mtu, CLEANUP_mtu, 0, {NULL}, "nmap compat: fragmentation not supported"},
+    {"nmap", SET_nmap, CLEANUP_nmap, F_BOOL, {NULL}, "print the nmap-compatible option list and exit"},
+    {"offline", SET_offline, CLEANUP_offline, F_BOOL, {"notransmit", "nosend", "dry-run", NULL}, "prepare the scan but don't transmit anything"},
+    {"osscan-limit", SET_osscan_limit, CLEANUP_osscan_limit, F_BOOL, {NULL}, "nmap compat: OS detection not supported"},
+    {"osscan-guess", SET_osscan_guess, CLEANUP_osscan_guess, F_BOOL, {NULL}, "nmap compat: OS detection not supported"},
+    {"packet-trace", SET_packet_trace, CLEANUP_packet_trace, F_BOOL, {"trace-packet", NULL}, "print every packet sent and received"},
+    {"privileged", SET_privileged, CLEANUP_privileged, F_BOOL, {"unprivileged", NULL}, "nmap compat: ignored"},
+    {"pfring", SET_pfring, CLEANUP_pfring, F_BOOL, {NULL}, "use PF_RING for transmission (Linux)"},
+    {"port-ratio", SET_port_ratio, CLEANUP_port_ratio, 0, {NULL}, "nmap compat: ignored"},
+    {"readrange", SET_readrange, CLEANUP_readrange, F_BOOL, {"read-range", "read-ranges", "readranges", NULL}, "print the target ranges, then exit"},
+    {"reason", SET_reason, CLEANUP_reason, F_BOOL, {NULL}, "show the reason for each reported port"},
+    {"redis", SET_redis, CLEANUP_redis, 0, {NULL}, "publish results to redis: <ip>:<port> or /path/socket (default port 6379)"},
+    {"release-memory", SET_release_memory, CLEANUP_release_memory, F_BOOL, {NULL}, "debug: free all memory before exiting"},
+    {"resume", SET_resume, CLEANUP_resume, 0, {NULL}, "resume an aborted scan from this saved config"},
+    {"vuln", SET_vuln, CLEANUP_vuln, 0, {NULL}, "enable a vulnerability check: heartbleed|ticketbleed|sslv3"},
+    {"scan-delay", SET_scan_delay, CLEANUP_scan_delay, 0, {"max-scan-delay", NULL}, "nmap compat: ignored"},
+    {"scanflags", SET_scanflags, CLEANUP_scanflags, 0, {NULL}, "nmap compat: ignored"},
+    {"sendq", SET_sendq, CLEANUP_sendq, F_BOOL, {"sendqueue", NULL}, "use the PF_RING zero-copy transmit queue"},
+    {"send-eth", SET_send_eth, CLEANUP_send_eth, F_BOOL, {NULL}, "send raw ethernet frames (default)"},
+    {"send-ip", SET_send_ip, CLEANUP_send_ip, F_BOOL, {NULL}, "send raw IP packets instead of ethernet"},
+    {"selftest", SET_selftest, CLEANUP_selftest, F_BOOL, {"self-test", "regress", NULL}, "run the regression tests and exit"},
+    {"benchmark", SET_benchmark, CLEANUP_benchmark, F_BOOL, {NULL}, "run internal benchmarks and exit"},
+    {"no-stylesheet", SET_no_stylesheet, CLEANUP_no_stylesheet, F_BOOL, {NULL}, "omit the stylesheet line from XML output"},
+    {"system-dns", SET_system_dns, CLEANUP_system_dns, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"top-ports", SET_top_ports, CLEANUP_top_ports, 0, {NULL}, "scan only the top N ports (default 1000 when N is omitted)"},
+    {"traceroute", SET_traceroute, CLEANUP_traceroute, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"test", SET_test, CLEANUP_test, 0, {"notest", NULL}, "toggle offline unit test modes (e.g. csv)"},
+    {"ttl", SET_ttl, CLEANUP_ttl, 0, {NULL}, "IP time-to-live for outgoing packets"},
+    {"version", SET_version, CLEANUP_version, F_BOOL, {NULL}, "print the version and exit"},
+    {"version-intensity", SET_version_intensity, CLEANUP_version_intensity, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"version-light", SET_version_light, CLEANUP_version_light, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"version-all", SET_version_all, CLEANUP_version_all, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"version-trace", SET_version_trace, CLEANUP_version_trace, F_BOOL, {NULL}, "nmap compat: ignored"},
+    {"vlan", SET_vlan, CLEANUP_vlan, 0, {"adapter-vlan", NULL}, "802.1Q VLAN id for outgoing frames"},
+    {"wait", SET_wait, CLEANUP_wait, 0, {NULL}, "seconds to wait for late replies after the scan ends (default 10)"},
+    {"webxml", SET_webxml, CLEANUP_webxml, F_BOOL, {NULL}, "use the classic masscan web stylesheet in XML output"},
+    {"SPACE", SET_space, CLEANUP_space, 0, {NULL}, "internal: positional targets in config files"},
     {NULL}};
+
+/***************************************************************************
+ * Print every parameter the config parser accepts, straight from the
+ * table above, so the help text can never drift out of sync with the
+ * parser. Boolean parameters are printed bare, value parameters with
+ * a <v> placeholder, aliases on an indented "aka" line.
+ ***************************************************************************/
+
+/* word-wrap printer: first word goes at the current column (the caller
+ * has already printed up to it), wrapped lines at continuation_column */
+static void print_wrapped(const char *text, unsigned column,
+                          unsigned continuation_column) {
+  const char *p = text;
+
+  while (*p) {
+    const char *word = p;
+    unsigned len = 0;
+
+    while (word[len] && word[len] != ' ') {
+      len++;
+    }
+    if (column > continuation_column && column + len + 1 > 78) {
+      printf("\n%*s", (int)continuation_column, "");
+      column = continuation_column;
+    } else if (column > continuation_column) {
+      putchar(' ');
+      column++;
+    }
+    printf("%.*s", (int)len, word);
+    column += len;
+    p = word + len;
+    while (*p == ' ') {
+      p++;
+    }
+  }
+}
+
+static void print_config_parameter_list(void) {
+  size_t i, j;
+
+  printf("ALL PARAMETERS (generated from the config parser; every one of\n"
+         "these works as '--name=value' on the command-line or as\n"
+         "'name = value' in a config file):\n\n");
+
+  for (i = 0; config_parameters[i].name; i++) {
+    char flags[128];
+    char aka[192];
+    size_t len;
+    size_t aka_len = 0;
+
+    /* 'SPACE' is an internal placeholder for positional targets in
+     * config files, not a user-facing parameter */
+    if (EQUALS("SPACE", config_parameters[i].name)) {
+      continue;
+    }
+
+    len = (size_t)sprintf_s(flags, sizeof(flags), "--%s",
+                            config_parameters[i].name);
+    if ((config_parameters[i].flags & F_BOOL) == 0) {
+      len += (size_t)sprintf_s(flags + len, sizeof(flags) - len, " <v>");
+    }
+
+    for (j = 0; config_parameters[i].alts[j]; j++) {
+      /* some entries list their own name as an alias; print it once.
+       * strcmp, not EQUALS(): that macro ignores '-'/'_' and would
+       * also swallow near-duplicates like "self-test" for "selftest" */
+      if (strcmp(config_parameters[i].name, config_parameters[i].alts[j]) == 0) {
+        continue;
+      }
+      if (aka_len) {
+        aka[aka_len++] = ' ';
+      }
+      aka_len += (size_t)sprintf_s(aka + aka_len, sizeof(aka) - aka_len,
+                                   "--%s,", config_parameters[i].alts[j]);
+    }
+
+    /* entry line: flags, then the description in a fixed column (or on
+     * the next line when the flag list is too long), both wrapped */
+    printf("  %s", flags);
+    if (len + 2 < 30) {
+      printf("%*s", (int)(30 - len - 2), "");
+    } else {
+      printf("\n%*s", 30, " ");
+    }
+    if (config_parameters[i].desc) {
+      print_wrapped(config_parameters[i].desc, 32, 32);
+    }
+    printf("\n");
+
+    if (aka_len) {
+      aka[aka_len - 1] = '\0'; /* strip trailing comma */
+      printf("%*s", 6, "");
+      print_wrapped(aka, 6, 10);
+      printf("\n");
+    }
+  }
+}
 
 static int EQUALS_PARAMS_FLAGS(const char *lhs, const char *rhs,
                                size_t rhs_length, unsigned flags) {
@@ -5067,35 +5061,7 @@ static int is_singleton(const char *name) {
 /*****************************************************************************
  *****************************************************************************/
 static void masscan_help() {
-  printf(
-      "MASSCAN is a fast port scanner. The primary input parameters are the\n"
-      "IP addresses/ranges you want to scan, and the port numbers. An example\n"
-      "is the following, which scans the 10.x.x.x network for web servers:\n"
-      " masscan 10.0.0.0/8 -p80\n"
-      "The program auto-detects network interface/adapter settings. If this\n"
-      "fails, you'll have to set these manually. The following is an\n"
-      "example of all the parameters that are needed:\n"
-      " --adapter-ip 192.168.10.123\n"
-      " --adapter-mac 00-11-22-33-44-55\n"
-      " --router-mac 66-55-44-33-22-11\n"
-      "Parameters can be set either via the command-line or config-file. The\n"
-      "names are the same for both. Thus, the above adapter settings would\n"
-      "appear as follows in a configuration file:\n"
-      " adapter-ip = 192.168.10.123\n"
-      " adapter-mac = 00-11-22-33-44-55\n"
-      " router-mac = 66-55-44-33-22-11\n"
-      "All single-dash parameters have a spelled out double-dash equivalent,\n"
-      "so '-p80' is the same as '--ports 80' (or 'ports = 80' in config "
-      "file).\n"
-      "To use the config file, type:\n"
-      " masscan -c <filename>\n"
-      "To generate a config-file from the current settings, use the --echo\n"
-      "option. This stops the program from actually running, and just echoes\n"
-      "the current configuration instead. This is a useful way to generate\n"
-      "your first config file, or see a list of parameters you didn't know\n"
-      "about. I suggest you try it now:\n"
-      " masscan -p1234 --echo\n");
-  exit(1);
+  masscan_usage();
 }
 
 /***************************************************************************
