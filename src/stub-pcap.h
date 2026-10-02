@@ -14,6 +14,19 @@
 #define STUB_PCAP_H
 #include <stdio.h>
 
+#ifdef STATICPCAP
+/* Static mode: link libpcap at compile time. The real header defines the
+ * ABI (pcap_t, pcap_pkthdr, PCAP_ERRBUF_SIZE, ...) — the hand-rolled
+ * definitions below exist only for the runtime-dlopen path and would
+ * collide with it. The function-pointer table further down is shared by
+ * both modes. */
+#include <pcap.h>
+/* Real pcap.h declares pcap_init(unsigned int, char*); ours takes void and
+ * only wires the function-pointer table — rename ours out of the way. The
+ * macro also renames call sites (main.c) since they include this header. */
+#define pcap_init pcap_init_stub
+#else
+
 /* Including the right ".h" file to define "timeval" is difficult, so instead
  * so instead we are simply going to define our own structure. This should
  * match the binary definition within the operating system
@@ -83,6 +96,8 @@ struct pcap_pkthdr {
   char comment[256];
 #endif
 };
+
+#endif /* STATICPCAP: end of the dlopen-path ABI definitions */
 
 /*
  * This block is for function declarations. Consult the libpcap

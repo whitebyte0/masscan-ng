@@ -52,13 +52,16 @@
 #endif
 #endif
 
+#ifndef STATICPCAP
+/* In static mode pcap.h (via stub-pcap.h) defines the real struct. */
 struct pcap_if {
   struct pcap_if *next;
   char *name;        /* name to hand to "pcap_open_live()" */
   char *description; /* textual description of interface, or NULL */
   void *addresses;
-  unsigned flags; /* PCAP_IF_ interface flags */
+  unsigned flags; /* PCAP_IF interface flags */
 };
+#endif
 
 static void seterr(char *errbuf, const char *msg) {
   size_t length = strlen(msg);
@@ -222,7 +225,9 @@ static const unsigned char *null_PCAP_NEXT(pcap_t *p, struct pcap_pkthdr *h) {
 static int null_PCAP_NEXT_EX(pcap_t *p, struct pcap_pkthdr **h,
                              unsigned char **data) {
 #ifdef STATICPCAP
-  return pcap_next_ex(p, h, data);
+  /* real signature: (pcap_t *, struct pcap_pkthdr **, const u_char **) */
+  return pcap_next_ex(p, (struct pcap_pkthdr **)h,
+                      (const u_char **)data);
 #endif
   my_null(3, p, h);
   return 0;

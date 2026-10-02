@@ -63,7 +63,7 @@ jobs:
     steps:
       # before checkout: the action needs git for fetch-depth 0 (tag embedding)
       - name: Install toolchain
-        run: apk add --no-cache build-base linux-headers curl perl git
+        run: apk add --no-cache build-base linux-headers curl perl flex bison git
 
       - uses: actions/checkout@v4
         with:
@@ -84,11 +84,21 @@ jobs:
           curl -fsSL https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz | tar xz
           cd openssl-3.0.16 && ./Configure no-shared no-tests linux-x86_64 --prefix=/usr/local --openssldir=/usr/local/ssl >/dev/null && make -j"$(nproc)" >/dev/null && make install_sw >/dev/null
 
+      - name: Build static libpcap 1.10.5
+        run: |
+          curl -fsSL https://www.tcpdump.org/release/libpcap-1.10.5.tar.gz | tar xz
+          cd libpcap-1.10.5 && ./configure --disable-shared --enable-static --with-pic --disable-dbus --disable-rdma --disable-bluetooth --disable-usb --without-libnl >/dev/null && make -j"$(nproc)" >/dev/null && make install >/dev/null
+
       - name: Build masscan-ng (static)
         run: |
+          # STATICPCAP: adapter init goes through libpcap — without it the
+          # binary dlopens libpcap.so at runtime and dies on adapter open
+          # ("can't open adapter: libpcap not loaded") on minimal nodes.
           # LIBS on the command line overrides the Makefile's musl dead-end
           # branch (it links nothing when uname contains "musl").
-          make -j"$(nproc)" LDFLAGS='-static -no-pie -L/usr/local/lib' LIBS='-lm -lpthread -ldl -lpcre -lssl -lcrypto -lz'
+          make -j"$(nproc)" CFLAGS='-g -DNDEBUG -Wall -O2 -DSTATICPCAP' \
+            LDFLAGS='-static -no-pie -L/usr/local/lib' \
+            LIBS='-lm -lpthread -ldl -lpcre -lssl -lcrypto -lz -lpcap'
           strip bin/masscan-ng
           ./bin/masscan-ng --version
 
