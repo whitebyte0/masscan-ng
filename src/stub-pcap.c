@@ -81,15 +81,37 @@ static void null_PCAP_CLOSE(void *hPcap) {
 }
 
 #ifdef STATICPCAP
-static pcap_t *(*null_PCAP_CREATE)(const char *source, char *errbuf);
-static int (*null_PCAP_SET_SNAPLEN)(pcap_t *p, int snaplen);
-static int (*null_PCAP_SET_PROMISC)(pcap_t *p, int promisc);
-static int (*null_PCAP_SET_TIMEOUT)(pcap_t *p, int to_ms);
-static int (*null_PCAP_SET_IMMEDIATE_MODE)(pcap_t *p, int immediate_mode);
-static int (*null_PCAP_SET_BUFFER_SIZE)(pcap_t *p, int buffer_size);
-static int (*null_PCAP_SET_RFMON)(pcap_t *p, int rfmon);
-static int (*null_PCAP_CAN_SET_RFMON)(pcap_t *p);
-static int (*null_PCAP_ACTIVATE)(pcap_t *p);
+/* Real wrappers, like every other STATICPCAP branch: DOLINK assigns these
+ * into the function table. (The pointer-declaration block this replaces
+ * was upstream's half of an assignment that never happened here — the
+ * pointers stayed NULL and PCAP.create(...) segfaulted on scan start.) */
+static pcap_t *null_PCAP_CREATE(const char *source, char *errbuf) {
+  return pcap_create(source, errbuf);
+}
+static int null_PCAP_SET_SNAPLEN(pcap_t *p, int snaplen) {
+  return pcap_set_snaplen(p, snaplen);
+}
+static int null_PCAP_SET_PROMISC(pcap_t *p, int promisc) {
+  return pcap_set_promisc(p, promisc);
+}
+static int null_PCAP_SET_TIMEOUT(pcap_t *p, int to_ms) {
+  return pcap_set_timeout(p, to_ms);
+}
+static int null_PCAP_SET_IMMEDIATE_MODE(pcap_t *p, int immediate_mode) {
+  return pcap_set_immediate_mode(p, immediate_mode);
+}
+static int null_PCAP_SET_BUFFER_SIZE(pcap_t *p, int buffer_size) {
+  return pcap_set_buffer_size(p, buffer_size);
+}
+static int null_PCAP_SET_RFMON(pcap_t *p, int rfmon) {
+  return pcap_set_rfmon(p, rfmon);
+}
+static int null_PCAP_CAN_SET_RFMON(pcap_t *p) {
+  return pcap_can_set_rfmon(p);
+}
+static int null_PCAP_ACTIVATE(pcap_t *p) {
+  return pcap_activate(p);
+}
 #else
 static pcap_t *null_PCAP_CREATE(const char *source, char *errbuf) { return 0; }
 static int null_PCAP_SET_SNAPLEN(pcap_t *p, int snaplen) { return 0; }
