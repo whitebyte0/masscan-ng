@@ -1084,6 +1084,19 @@ static int SET_domain_map(struct Masscan *masscan, const char *name,
     LOG(LEVEL_WARNING, "domain-map: no entries in %s\n", value);
   masscan->is_domain_map = 1;
 
+  /* Heartbleed/Ticketbleed probes ride the STATIC TLS hello; the map
+   * forces the dynamic (OpenSSL) path, where those checks never run.
+   * Fail loudly instead of silently scanning without them — same
+   * treatment the poodle/sslv3 path gives ssl_dynamic. Note: order
+   * matters — these flags may appear before or after --domain-map on
+   * the command line, so the guard repeats in SET_heartbleed/ticketbleed. */
+  if (masscan->is_heartbleed || masscan->is_ticketbleed) {
+    LOG(LEVEL_ERROR,
+        "[-] FAIL: --heartbleed/--ticketbleed use the static TLS hello "
+        "and cannot run with --domain-map (dynamic TLS)\n");
+    return CONF_ERR;
+  }
+
   /* The Host/SNI rewrites ride these two paths; enabling them here keeps
    * scan templates untouched (an explicit earlier setting is overridden
    * — the map is meaningless without them). */
@@ -3703,6 +3716,14 @@ static int SET_heartbleed(struct Masscan *masscan, const char *name,
     return CONF_OK;
   }
 
+  if (masscan->is_domain_map) {
+    LOG(LEVEL_ERROR,
+        "[-] FAIL: %s uses the static TLS hello and cannot run with "
+        "--domain-map (dynamic TLS)\n",
+        name);
+    return CONF_ERR;
+  }
+
   if (parseBoolean(value)) {
     masscan->is_heartbleed = parseBoolean(value);
     masscan_set_parameter(masscan, "no-capture", "cert");
@@ -3727,6 +3748,14 @@ static int SET_ticketbleed(struct Masscan *masscan, const char *name,
       fprintf(masscan->echo, "ticketbleed = true\n");
     }
     return CONF_OK;
+  }
+
+  if (masscan->is_domain_map) {
+    LOG(LEVEL_ERROR,
+        "[-] FAIL: %s uses the static TLS hello and cannot run with "
+        "--domain-map (dynamic TLS)\n",
+        name);
+    return CONF_ERR;
   }
 
   if (parseBoolean(value)) {
