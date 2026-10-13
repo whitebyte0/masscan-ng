@@ -1,3 +1,4 @@
 paused.conf
 externals/
 /masscan-linux-amd64-static
+test.ndjson

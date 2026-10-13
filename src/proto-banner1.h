@@ -17,6 +17,7 @@
 
 struct InteractiveData;
 struct Banner1;
+struct DomainMap; /* read-only ip->domain table, see domain-map.h */
 struct ProtocolState;
 struct ResendPayload;
 
@@ -46,6 +47,7 @@ struct Banner1 {
   unsigned is_poodle_sslv3 : 1;
   unsigned is_regex_only_banners : 1;
   unsigned is_dynamic_set_host : 1;
+  const struct DomainMap *domain_map; /* NULL unless --domain-map */
 
   pcre *regex;
   pcre_extra *regex_extra;

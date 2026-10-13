@@ -19,6 +19,7 @@
 #include "proto-keyout.h"
 #include "proto-smb.h"
 #include "proto-ssl.h"
+#include "domain-map.h"
 #include "proto-tcp.h"
 #include "rawsock.h"
 #include "scripting.h"
@@ -366,6 +367,11 @@ void tcpcon_set_banner_flags(struct TCP_ConnectionTable *tcpcon,
   tcpcon->banner1->is_capture_heartbleed = is_capture_heartbleed;
   tcpcon->banner1->is_capture_ticketbleed = is_capture_ticketbleed;
   tcpcon->banner1->is_dynamic_set_host = is_dynamic_set_host;
+}
+
+void tcpcon_set_domain_map(struct TCP_ConnectionTable *tcpcon,
+                           const struct DomainMap *map) {
+  tcpcon->banner1->domain_map = map;
 }
 
 void tcpcon_set_regexp(struct TCP_ConnectionTable *tcpcon, pcre *re,

@@ -1,3 +1,4 @@
+#include "domain-map.h"
 #include "proto-http-over-ssl.h"
 #include "logger.h"
 #include "masscan-app.h"
@@ -739,6 +740,14 @@ static void ssl_transmit_init(const struct Banner1 *banner1,
 
   SSL_set_connect_state(ssl);
   SSL_set_bio(ssl, rbio, wbio);
+
+  /* SNI from --domain-map: servers serving many domains on one address
+   * pick the certificate (and often the vhost) by this name. */
+  if (banner1->domain_map != NULL) {
+    const char *domain = domainmap_lookup(banner1->domain_map, &pstate->ip);
+    if (domain != NULL)
+      SSL_set_tlsext_host_name(ssl, domain);
+  }
 
   res = SSL_set_ex_data(ssl, 0, banout);
   if (res != 1) {

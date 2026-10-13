@@ -119,6 +119,8 @@ void tcpcon_set_banner_flags(struct TCP_ConnectionTable *tcpcon,
                              bool is_ssl_dynamic, bool is_capture_key,
                              bool is_capture_html, bool is_capture_heartbleed,
                              bool is_capture_ticketbleed, bool is_set_host);
+void tcpcon_set_domain_map(struct TCP_ConnectionTable *tcpcon,
+                           const struct DomainMap *map);
 void tcpcon_set_regexp(struct TCP_ConnectionTable *tcpcon, pcre *re,
                        pcre_extra *re_extra, unsigned is_regex_only_banners);
 

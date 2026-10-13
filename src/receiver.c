@@ -685,6 +685,9 @@ void receive_thread(void *v) {
           (bool)masscan->is_capture_html, (bool)masscan->is_capture_heartbleed,
           (bool)masscan->is_capture_ticketbleed,
           (bool)masscan->is_dynamic_set_host);
+      tcpcon_set_domain_map(
+          threads_handle_recv[iter_recv_handle_thread].tcpcon,
+          masscan->domain_map);
 
       tcpcon_init_banner1(threads_handle_recv[iter_recv_handle_thread].tcpcon);
       udpcon_init_banner1(threads_handle_recv[iter_recv_handle_thread].udpcon);

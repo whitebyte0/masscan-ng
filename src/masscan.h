@@ -74,6 +74,8 @@ struct TcpCfgPayloads {
   struct TcpCfgPayloads *next;
 };
 
+struct DomainMap; /* parsed "<ip> <domain>" table — see domain-map.h */
+
 /* This is the master MASSCAN configuration structure. It is created on startup
  * by reading the command-line and parsing configuration files.
  *
@@ -171,8 +173,14 @@ struct Masscan {
   unsigned is_capture_servername : 1; /* --capture servername */
   unsigned is_regex_only_banners : 1; /* --regex-only-banners */
   unsigned is_dynamic_set_host : 1;   /* --dynamic-set-host */
+  unsigned is_domain_map : 1;         /* --domain-map <file> was given */
   unsigned is_echo_all : 1;           /* --echo-all */
   unsigned is_tranquility : 1;        /* --is_tranquility */
+
+  /* Parsed "<ip> <domain>" table for per-target HTTP Host and TLS SNI
+   * (see domain-map.h). Loaded once at config time, read-only after. */
+  char domain_map_filename[256];
+  struct DomainMap *domain_map;
 
   /* Wait forever for responses, instead of the default 10 seconds */
   time_t wait;

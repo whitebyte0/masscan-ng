@@ -16,6 +16,7 @@
 #include "masscan-app.h"
 #include "masscan-version.h"
 #include "masscan.h"
+#include "domain-map.h"
 #include "massip-addr.h"
 #include "massip-parse.h"
 #include "massip-port.h"
@@ -113,6 +114,7 @@ void masscan_usage() {
   printf("  --dynamic-ssl=true        do a full TLS handshake with OpenSSL;\n");
   printf("                            required for --capture html over TLS\n");
   printf("  --dynamic-set-host        set HTTP Host header to the target's IP\n");
+  printf("  --domain-map <file>       per-IP domain file: sets HTTP Host and TLS SNI\n");
   printf("  --capture <what>          cert | servername | html | heartbleed |\n");
   printf("                            ticketbleed (repeatable)\n");
   printf("  --regex <expr>            PCRE; only output records that match\n");
@@ -1055,6 +1057,48 @@ static int SET_dynamic_set_host(struct Masscan *masscan, const char *name,
 
 static void CLEANUP_dynamic_set_host(struct Masscan *masscan,
                                      const char *name) {
+  UNUSEDPARM(name);
+  UNUSEDPARM(masscan);
+  return;
+}
+
+static int SET_domain_map(struct Masscan *masscan, const char *name,
+                          const char *value) {
+  UNUSEDPARM(name);
+
+  if (masscan->echo) {
+    if (masscan->is_domain_map || masscan->echo_all)
+      fprintf(masscan->echo, "domain-map = %s\n",
+              masscan->domain_map_filename);
+    return CONF_OK;
+  }
+
+  snprintf(masscan->domain_map_filename,
+           sizeof(masscan->domain_map_filename), "%s", value);
+  masscan->domain_map = domainmap_parse_file(value);
+  if (masscan->domain_map == NULL) {
+    LOG(LEVEL_ERROR, "[-] FAIL: cannot read domain-map file: %s\n", value);
+    return CONF_ERR;
+  }
+  if (masscan->domain_map->count == 0)
+    LOG(LEVEL_WARNING, "domain-map: no entries in %s\n", value);
+  masscan->is_domain_map = 1;
+
+  /* The Host/SNI rewrites ride these two paths; enabling them here keeps
+   * scan templates untouched (an explicit earlier setting is overridden
+   * — the map is meaningless without them). */
+  if (!masscan->is_dynamic_set_host) {
+    LOG(LEVEL_INFO, "domain-map: enabling dynamic_set_host\n");
+    masscan->is_dynamic_set_host = 1;
+  }
+  if (!masscan->is_ssl_dynamic) {
+    LOG(LEVEL_INFO, "domain-map: enabling dynamic-ssl\n");
+    masscan->is_ssl_dynamic = 1;
+  }
+  return CONF_OK;
+}
+
+static void CLEANUP_domain_map(struct Masscan *masscan, const char *name) {
   UNUSEDPARM(name);
   UNUSEDPARM(masscan);
   return;
@@ -4754,6 +4798,7 @@ struct ConfigParameter config_parameters[] = {
     {"banners", SET_banners, CLEANUP_banners, F_BOOL, {"banner", "nobanners", "nobanner", NULL}, "grab banners of open services (TCP/UDP)"},
     {"dynamic-ssl", SET_dynamic_ssl, CLEANUP_dynamic_ssl, F_BOOL, {"dynamic-ssl", NULL}, "complete TLS handshakes via OpenSSL; needed for --capture html over TLS"},
     {"dynamic-set-host", SET_dynamic_set_host, CLEANUP_dynamic_set_host, F_BOOL, {NULL}, "set the HTTP Host header to the target's IP (per connection)"},
+    {"domain-map", SET_domain_map, CLEANUP_domain_map, 0, {NULL}, "file of \"<ip> <domain>\" lines; sets HTTP Host and TLS SNI per target (implies --dynamic-set-host --dynamic-ssl)"},
     {"regex-only-banners", SET_regex_only_banners, CLEANUP_regex_only_banners, F_BOOL, {NULL}, "apply --regex to banners only, always output status"},
     {"regex", SET_regex, CLEANUP_regex, 0, {"regex", NULL}, "PCRE: only records matching the expression are output"},
     {"retries", SET_retries, CLEANUP_retries, 0, {"retry", "max-retries", "max-retry", NULL}, "SYN retransmissions; 0 = send each probe once (default 0)"},

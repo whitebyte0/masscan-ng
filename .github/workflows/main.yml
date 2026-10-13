@@ -112,6 +112,21 @@ jobs:
           ./bin/masscan-ng -p 443 --rate 300 --wait 5 1.1.1.1 2>/dev/null | tee /tmp/scan.log
           grep -q "Discovered open port 443" /tmp/scan.log
 
+      - name: "Release gate: domain-map SNI + Host"
+        run: |
+          # --domain-map must steer the TLS SNI: Google serves
+          # CN=www.google.com only when SNI matches, and serves
+          # CN=invalid2.invalid with no SNI — a hard oracle. The same
+          # lookup drives the HTTP Host rewrite, verified by the 200
+          # for the vhost. Resolve at run time; Google's IPs move.
+          GIP="$(dig +short www.google.com A | grep -E '^[0-9]+\.' | head -1)"
+          test -n "$GIP"
+          printf '%s www.google.com\n' "$GIP" > /tmp/dmap.txt
+          ./bin/masscan-ng "$GIP" -p 443 --banners --capture cert \
+            --domain-map /tmp/dmap.txt --rate 50 --wait 10 2>/dev/null | tee /tmp/dmap-scan.log
+          grep -q "www.google.com" /tmp/dmap-scan.log
+          ! grep -q "invalid2.invalid" /tmp/dmap-scan.log
+
       - name: Stage asset
         run: mv bin/masscan-ng masscan-linux-amd64-static
 

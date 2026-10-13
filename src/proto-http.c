@@ -1,3 +1,4 @@
+#include "domain-map.h"
 #include "proto-http.h"
 #include "logger.h"
 #include "masscan-app.h"
@@ -683,16 +684,27 @@ static void http_transmit_hello(const struct Banner1 *banner1,
     unsigned char *data = NULL;
     size_t data_length = 0;
     ipaddress_formatted_t fmt;
-    ipaddress_fmt(&fmt, &pstate->ip);
+    const char *host_value;
+
+    /* --domain-map wins: the scanned address may belong to a domain
+     * (vhost), in which case Host must be the name, not the IP. */
+    if (banner1->domain_map != NULL) {
+      host_value = domainmap_lookup(banner1->domain_map, &pstate->ip);
+    } else
+      host_value = NULL;
+    if (host_value == NULL) {
+      ipaddress_fmt(&fmt, &pstate->ip);
+      host_value = fmt.string;
+    }
 
     data_length = banner_http.hello_length;
-    data = MALLOC(data_length + sizeof("Host: ") + sizeof(fmt.string) + 16);
+    data = MALLOC(data_length + sizeof("Host: ") + strlen(host_value) + 16);
     memcpy(data, banner_http.hello, banner_http.hello_length);
     data[data_length] = '\0';
 
     data_length = http_change_field(&data, data_length,
-                                    "Host:", (unsigned char *)fmt.string,
-                                    strlen(fmt.string), http_field_replace);
+                                    "Host:", (unsigned char *)host_value,
+                                    strlen(host_value), http_field_replace);
 
     tcp_transmit(more, data, data_length, true);
   } else {

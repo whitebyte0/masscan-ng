@@ -9,6 +9,7 @@
 #include "pixie-timer.h"   /* portable time functions */
 #include "proto-arp.h"     /* for responding to ARP requests */
 #include "proto-banner1.h" /* for snatching banners from systems */
+#include "domain-map.h"    /* ip->domain map selftest */
 #include "proto-coap.h"    /* CoAP selftest */
 #include "proto-icmp.h"    /* handle ICMP responses */
 #include "proto-interactive.h"
@@ -43,6 +44,7 @@ int selftest(const struct Masscan *masscan) {
   int x = 0;
 
   x += dedup_selftest();
+  x += domainmap_selftest();
   x += checksum_selftest();
   x += ipv6address_selftest();
   x += transmit_selftest();
