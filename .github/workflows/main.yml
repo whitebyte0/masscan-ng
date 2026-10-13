@@ -116,16 +116,25 @@ jobs:
         run: |
           # --domain-map must steer the TLS SNI: Google serves
           # CN=www.google.com only when SNI matches, and serves
-          # CN=invalid2.invalid with no SNI — a hard oracle. The same
-          # lookup drives the HTTP Host rewrite, verified by the 200
-          # for the vhost. Resolve at run time; Google's IPs move.
-          GIP="$(dig +short www.google.com A | grep -E '^[0-9]+\.' | head -1)"
-          test -n "$GIP"
+          # CN=invalid2.invalid with no SNI — a hard oracle (1.1.1.1 and
+          # github.com ignore SNI and serve the same cert either way).
+          # The same lookup drives the HTTP Host rewrite. This job runs
+          # in an alpine container: no dig, so musl's getent resolves.
+          # Banner grabs can miss transiently — retry a few times.
+          GIP="$(getent hosts www.google.com | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
+          if [ -z "$GIP" ]; then echo "gate: www.google.com did not resolve"; exit 1; fi
           printf '%s www.google.com\n' "$GIP" > /tmp/dmap.txt
-          ./bin/masscan-ng "$GIP" -p 443 --banners --capture cert \
-            --domain-map /tmp/dmap.txt --rate 50 --wait 10 2>/dev/null | tee /tmp/dmap-scan.log
-          grep -q "www.google.com" /tmp/dmap-scan.log
-          ! grep -q "invalid2.invalid" /tmp/dmap-scan.log
+          ok=0
+          for i in 1 2 3; do
+            ./bin/masscan-ng "$GIP" -p 443 --banners --capture cert \
+              --domain-map /tmp/dmap.txt --rate 100 --wait 15 > /tmp/dmap-scan.log 2>/dev/null
+            if grep -q "www.google.com" /tmp/dmap-scan.log && ! grep -q "invalid2.invalid" /tmp/dmap-scan.log; then
+              ok=1; break
+            fi
+            echo "gate attempt $i: no www.google.com certificate, retrying"; sleep 5
+          done
+          if [ "$ok" != 1 ]; then echo "gate failed; last scan output:"; tail -5 /tmp/dmap-scan.log; exit 1; fi
+          echo "domain-map SNI gate passed on attempt $i"
 
       - name: Stage asset
         run: mv bin/masscan-ng masscan-linux-amd64-static
