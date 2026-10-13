@@ -10,6 +10,8 @@
 #include "proto-arp.h"     /* for responding to ARP requests */
 #include "proto-banner1.h" /* for snatching banners from systems */
 #include "domain-map.h"    /* ip->domain map selftest */
+#include "proto-http.h"         /* Host rewrite selftest */
+#include "proto-http-over-ssl.h" /* SNI rewrite selftest */
 #include "proto-coap.h"    /* CoAP selftest */
 #include "proto-icmp.h"    /* handle ICMP responses */
 #include "proto-interactive.h"
@@ -45,6 +47,8 @@ int selftest(const struct Masscan *masscan) {
 
   x += dedup_selftest();
   x += domainmap_selftest();
+  x += http_hello_domainmap_selftest();
+  x += ssl_sni_domainmap_selftest();
   x += checksum_selftest();
   x += ipv6address_selftest();
   x += transmit_selftest();

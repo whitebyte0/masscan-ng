@@ -26,3 +26,5 @@ size_t http_change_requestline(unsigned char **inout_header,
                                enum http_request_line_t item);
 
 #endif
+
+int http_hello_domainmap_selftest(void);

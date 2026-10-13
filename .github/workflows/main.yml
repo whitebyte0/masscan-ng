@@ -112,31 +112,18 @@ jobs:
           ./bin/masscan-ng -p 443 --rate 300 --wait 5 1.1.1.1 2>/dev/null | tee /tmp/scan.log
           grep -q "Discovered open port 443" /tmp/scan.log
 
-      - name: "Release gate: domain-map SNI + Host"
+      - name: "Release gate: selftests (incl. domain-map Host/SNI)"
         run: |
-          # --domain-map must steer the TLS SNI. Our own front
-          # (3qf4.site, caddy with per-name certs) is a hard oracle:
-          # with SNI it serves CN=3qf4.site, without a matching SNI the
-          # handshake is rejected outright (bare ALERT banner). Public
-          # alternatives proved useless — 1.1.1.1, github.com and gitlab
-          # ignore SNI and serve the same cert either way, and Google
-          # does not answer banner grabs from CI runner IPs. This job
-          # runs in an alpine container: no dig, so musl's getent
-          # resolves. Banner grabs can miss transiently — retry.
-          FIP="$(getent hosts 3qf4.site | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
-          if [ -z "$FIP" ]; then echo "gate: 3qf4.site did not resolve"; exit 1; fi
-          printf '%s 3qf4.site\n' "$FIP" > /tmp/dmap.txt
-          ok=0
-          for i in 1 2 3; do
-            ./bin/masscan-ng "$FIP" -p 443 --banners --capture cert \
-              --domain-map /tmp/dmap.txt --rate 50 --wait 15 > /tmp/dmap-scan.log 2>/dev/null
-            if grep -aq "3qf4.site" /tmp/dmap-scan.log; then
-              ok=1; break
-            fi
-            echo "gate attempt $i: no 3qf4.site certificate, retrying"; sleep 5
-          done
-          if [ "$ok" != 1 ]; then echo "gate failed; last scan output:"; tail -5 /tmp/dmap-scan.log; exit 1; fi
-          echo "domain-map SNI gate passed on attempt $i"
+          # The full regression suite, which since the domain-map change
+          # includes network-free assertions of both rewrites: the HTTP
+          # hello carries Host: <domain> (flag > map > IP precedence)
+          # and the dynamic-SSL object carries the mapped name as SNI
+          # (asserted via SSL_get_servername). External TLS oracles were
+          # tried and dropped: Google ignores banner grabs from CI
+          # runner IPs, and 1.1.1.1, github.com and our own front serve
+          # the same certificate with or without SNI.
+          ./bin/masscan-ng --selftest 2>&1 | tee /tmp/selftest.log | tail -1
+          grep -q "regression test: success" /tmp/selftest.log
 
       - name: Stage asset
         run: mv bin/masscan-ng masscan-linux-amd64-static

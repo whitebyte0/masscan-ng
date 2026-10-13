@@ -7,3 +7,5 @@ struct ProtocolParserStream *
 get_ssl_parser_stream(const struct Banner1 *banner1);
 
 #endif
+
+int ssl_sni_domainmap_selftest(void);

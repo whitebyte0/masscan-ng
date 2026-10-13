@@ -1046,3 +1046,80 @@ struct ProtocolParserStream banner_http = {"http",
                                            http_parse,
                                            NULL,
                                            http_transmit_hello};
+
+
+/*****************************************************************************
+ * Self-test for the per-connection Host rewrite: --http-host beats the
+ * --domain-map entry, which beats the target IP. Runs the REAL transmit
+ * function against a captured buffer — no sockets involved, so it works
+ * everywhere the binary runs (the CI release gate executes it).
+ *****************************************************************************/
+static int contains(const unsigned char *px, size_t len, const char *needle) {
+  size_t nlen = strlen(needle);
+  size_t i;
+  if (len < nlen)
+    return 0;
+  for (i = 0; i + nlen <= len; i++)
+    if (memcmp(px + i, needle, nlen) == 0)
+      return 1;
+  return 0;
+}
+
+int http_hello_domainmap_selftest(void) {
+  struct Banner1 b[1];
+  struct ProtocolState pstate[1];
+  struct InteractiveData more[1];
+  struct DomainMap *map;
+  int x = 0;
+
+  memset(b, 0, sizeof(b));
+  banner_http.init(b);
+  b->is_dynamic_set_host = 1;
+
+  memset(pstate, 0, sizeof(pstate));
+  pstate->ip.version = 4;
+  pstate->ip.ipv4 = 0xC000020A; /* 192.0.2.10 */
+  pstate->parser_stream = &banner_http;
+
+#define HTTP_HOST_RUN()                                                        \
+  do {                                                                         \
+    memset(more, 0, sizeof(more));                                             \
+    http_transmit_hello(b, pstate, NULL, NULL, NULL, more);                    \
+  } while (0)
+
+  /* mapped address -> Host carries the domain */
+  map = (struct DomainMap *)calloc(1, sizeof(*map));
+  domainmap_add_line(map, "192.0.2.10 one.example.com");
+  b->domain_map = map;
+  HTTP_HOST_RUN();
+  if (more->m_length == 0 ||
+      !contains(more->m_payload, more->m_length, "Host: one.example.com")) {
+    LOG(LEVEL_ERROR, "http domainmap selftest: mapped Host missing\n");
+    x++;
+  }
+
+  /* unmapped address -> Host falls back to the IP */
+  pstate->ip.ipv4 = 0xC0000263; /* 192.0.2.99 */
+  HTTP_HOST_RUN();
+  if (more->m_length == 0 ||
+      !contains(more->m_payload, more->m_length, "Host: 192.0.2.99")) {
+    LOG(LEVEL_ERROR, "http domainmap selftest: IP fallback Host missing\n");
+    x++;
+  }
+
+  /* explicit --http-host beats the map */
+  b->http_host_override = "flag.example.com";
+  pstate->ip.ipv4 = 0xC000020A;
+  HTTP_HOST_RUN();
+  if (more->m_length == 0 ||
+      !contains(more->m_payload, more->m_length, "Host: flag.example.com")) {
+    LOG(LEVEL_ERROR, "http domainmap selftest: override Host missing\n");
+    x++;
+  }
+  b->http_host_override = NULL;
+
+  domainmap_free(map);
+  b->domain_map = NULL;
+  banner_http.cleanup(b);
+  return x;
+}

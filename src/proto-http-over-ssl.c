@@ -1141,3 +1141,60 @@ struct ProtocolParserStream banner_http_over_ssl = {
     ssl_transmit_cleanup,
     ssl_transmit_hello,
 };
+
+
+/*****************************************************************************
+ * Self-test for the SNI hook: after ssl_transmit_init (the real setup
+ * path, map lookup included), the SSL object must carry the mapped
+ * domain — OpenSSL itself puts it into the ClientHello. Asserts via
+ * SSL_get_servername, no sockets involved.
+ *****************************************************************************/
+int ssl_sni_domainmap_selftest(void) {
+  struct Banner1 b[1];
+  struct ProtocolState pstate[1];
+  struct DomainMap *map;
+  const char *name;
+  int x = 0;
+
+  memset(b, 0, sizeof(b));
+  b->is_ssl_dynamic = 1;
+  banner_http_over_ssl.init(b); /* creates ssl_ctx */
+
+  memset(pstate, 0, sizeof(pstate));
+  pstate->ip.version = 4;
+  pstate->ip.ipv4 = 0xC000020A; /* 192.0.2.10 */
+  pstate->parser_stream = &banner_http_over_ssl;
+
+  map = (struct DomainMap *)calloc(1, sizeof(*map));
+  domainmap_add_line(map, "192.0.2.10 one.example.com");
+  b->domain_map = map;
+
+  ssl_transmit_init(b, pstate, NULL, NULL, NULL);
+
+  name = SSL_get_servername(pstate->sub.ssl_dynamic.ssl,
+                            TLSEXT_NAMETYPE_host_name);
+  if (name == NULL || strcmp(name, "one.example.com") != 0) {
+    LOG(LEVEL_ERROR, "ssl sni selftest: name = %s, want one.example.com\n",
+        name ? name : "(null)");
+    x++;
+  }
+
+  /* unmapped address -> no SNI set at all */
+  memset(pstate, 0, sizeof(pstate));
+  pstate->ip.version = 4;
+  pstate->ip.ipv4 = 0xC0000263; /* 192.0.2.99 */
+  pstate->parser_stream = &banner_http_over_ssl;
+  ssl_transmit_init(b, pstate, NULL, NULL, NULL);
+  name = SSL_get_servername(pstate->sub.ssl_dynamic.ssl,
+                            TLSEXT_NAMETYPE_host_name);
+  if (name != NULL) {
+    LOG(LEVEL_ERROR, "ssl sni selftest: unmapped address got SNI %s\n",
+        name);
+    x++;
+  }
+
+  domainmap_free(map);
+  b->domain_map = NULL;
+  banner_http_over_ssl.cleanup(b);
+  return x;
+}
