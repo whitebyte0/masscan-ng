@@ -176,6 +176,39 @@ not strictly necessary.
 The same thing is needed for other checks, such as the `--heartbleed` check,
 which is just a form of banner checking.
 
+### Domain scanning (--domain-map)
+
+Masscan-ng scans IP addresses, not names — resolution belongs to the
+orchestrator. But once you know which IPs belong to a domain, you can
+tell masscan-ng about it and every probe is stamped for that domain:
+
+    # printf '1.2.3.4 www.example.com\n2001:db8::1 api.example.com\n' > domains.txt
+    # masscan-ng 1.2.3.4 2001:db8::1 -p80,443 --banners --capture cert \
+          --domain-map domains.txt
+
+The file holds one `<ip> <domain>` pair per line (IPv4 and IPv6, `#`
+comments allowed). Per connection to a mapped address:
+
+  * **HTTP** requests carry `Host: <domain>` instead of the raw IP.
+  * **TLS** handshakes send `<domain>` as SNI, so vhosts serve the right
+    certificate and content (requires the full OpenSSL handshake, which
+    `--domain-map` enables automatically, together with the Host rewrite).
+
+Host header precedence, most specific first: an explicit `--http-host`
+value, then the `--domain-map` entry, then the target IP. SNI comes
+solely from the domain map.
+
+Notes:
+
+  * One domain per IP per invocation — the orchestrator runs one scan
+    per domain when several domains share an address, keeping every
+    probe's results separate.
+  * A bad line in the map (typo'd IP, missing domain) aborts startup
+    instead of silently narrowing the map.
+  * `--heartbleed`/`--ticketbleed` use the static TLS hello and cannot
+    run with `--domain-map` (dynamic TLS); the combination is rejected
+    at startup.
+
 ### How to scan the entire Internet
 
 While useful for smaller, internal networks, the program is really designed

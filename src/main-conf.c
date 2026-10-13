@@ -114,7 +114,8 @@ void masscan_usage() {
   printf("  --dynamic-ssl=true        do a full TLS handshake with OpenSSL;\n");
   printf("                            required for --capture html over TLS\n");
   printf("  --dynamic-set-host        set HTTP Host header to the target's IP\n");
-  printf("  --domain-map <file>       per-IP domain file: sets HTTP Host and TLS SNI\n");
+  printf("  --domain-map <file>       per-IP domain file: HTTP Host + TLS SNI\n");
+  printf("                            (Host precedence: --http-host > map > IP)\n");
   printf("  --capture <what>          cert | servername | html | heartbleed |\n");
   printf("                            ticketbleed (repeatable)\n");
   printf("  --regex <expr>            PCRE; only output records that match\n");
@@ -263,6 +264,11 @@ void print_nmap_help(void) {
       "  --banners: get the banners of the listening service if available. "
       "The\n"
       "    default timeout for waiting to receive data is 30 seconds.\n"
+      "  --domain-map <file>: \"<ip> <domain>\" lines. Per connection to a\n"
+      "    mapped address, HTTP requests carry Host: <domain> and TLS "
+      "handshakes\n"
+      "    send <domain> as SNI. Implies --dynamic-set-host --dynamic-ssl;\n"
+      "    an explicit --http-host still wins over the map for Host.\n"
       "PORT SPECIFICATION AND SCAN ORDER:\n"
       "  -p <port ranges>: Only scan specified ports\n"
       "    Ex: -p22; -p1-65535; -p 111,137,80,139,8080\n"
