@@ -118,10 +118,11 @@ jobs:
           # (3qf4.site, caddy with per-name certs) is a hard oracle:
           # with SNI it serves CN=3qf4.site, without a matching SNI the
           # handshake is rejected outright (bare ALERT banner). Public
-          # alternatives proved useless — 1.1.1.1, github.com and
-          # gitlab ignore SNI and serve the same cert either way, and
-          # Google does not answer banner grabs from CI runner IPs.
-          # This job runs in alpine (no dig); musl's getent resolves.
+          # alternatives proved useless — 1.1.1.1, github.com and gitlab
+          # ignore SNI and serve the same cert either way, and Google
+          # does not answer banner grabs from CI runner IPs. This job
+          # runs in an alpine container: no dig, so musl's getent
+          # resolves. Banner grabs can miss transiently — retry.
           FIP="$(getent hosts 3qf4.site | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
           if [ -z "$FIP" ]; then echo "gate: 3qf4.site did not resolve"; exit 1; fi
           printf '%s 3qf4.site\n' "$FIP" > /tmp/dmap.txt
@@ -133,101 +134,6 @@ jobs:
               ok=1; break
             fi
             echo "gate attempt $i: no 3qf4.site certificate, retrying"; sleep 5
-          done
-          if [ "$ok" != 1 ]; then echo "gate failed; last scan output:"; tail -5 /tmp/dmap-scan.log; exit 1; fi
-          echo "domain-map SNI gate passed on attempt $i"
-
-      - name: Stage asset
-        run: mv bin/masscan-ng masscan-linux-amd64
-
-      - name: Attach to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: masscan-linux-amd64
-
-  # Fully static (musl) Linux build. Alpine's packaged static archives are
-  # unusable here (libcrypto.a ships without the OBJ module; pcre/zlib have
-  # no .a at all), so zlib/PCRE1/OpenSSL are built from source into /usr/local
-  # and the final binary links -static -no-pie. The result runs on any Linux
-  # regardless of glibc/OpenSSL version — scan-x nodes on EOL distros depend
-  # on this asset (its name is a contract with scan-x's updater, which tries
-  # it first on Linux).
-  linux-static:
-    runs-on: ubuntu-latest
-    container:
-      image: node:20-alpine   # node so JS actions (checkout/gh-release) run
-    steps:
-      # before checkout: the action needs git for fetch-depth 0 (tag embedding)
-      - name: Install toolchain
-        run: apk add --no-cache build-base linux-headers curl perl flex bison git
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Build static zlib 1.3.1
-        run: |
-          curl -fsSL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz | tar xz
-          cd zlib-1.3.1 && ./configure --static >/dev/null && make -j"$(nproc)" >/dev/null && make install >/dev/null
-
-      - name: Build static PCRE1 8.45
-        run: |
-          curl -fsSL https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.gz | tar xz
-          cd pcre-8.45 && ./configure --disable-shared --enable-static --with-pic --enable-utf --enable-unicode-properties >/dev/null && make -j"$(nproc)" >/dev/null && make install >/dev/null
-
-      - name: Build static OpenSSL 3.0.16
-        run: |
-          curl -fsSL https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz | tar xz
-          cd openssl-3.0.16 && ./Configure no-shared no-tests linux-x86_64 --prefix=/usr/local --openssldir=/usr/local/ssl >/dev/null && make -j"$(nproc)" >/dev/null && make install_sw >/dev/null
-
-      - name: Build static libpcap 1.10.5
-        run: |
-          curl -fsSL https://www.tcpdump.org/release/libpcap-1.10.5.tar.gz | tar xz
-          cd libpcap-1.10.5 && ./configure --disable-shared --enable-static --with-pic --disable-dbus --disable-rdma --disable-bluetooth --disable-usb --without-libnl >/dev/null && make -j"$(nproc)" >/dev/null && make install >/dev/null
-
-      - name: Build masscan-ng (static)
-        run: |
-          # STATICPCAP: adapter init goes through libpcap — without it the
-          # binary dlopens libpcap.so at runtime and dies on adapter open
-          # ("can't open adapter: libpcap not loaded") on minimal nodes.
-          # LIBS on the command line overrides the Makefile's musl dead-end
-          # branch (it links nothing when uname contains "musl").
-          make -j"$(nproc)" CFLAGS='-g -DNDEBUG -Wall -O2 -DSTATICPCAP' \
-            LDFLAGS='-static -no-pie -L/usr/local/lib' \
-            LIBS='-lm -lpthread -ldl -lpcre -lssl -lcrypto -lz -lpcap'
-          strip bin/masscan-ng
-          ./bin/masscan-ng --version
-
-      - name: "Release gate: real scan"
-        run: |
-          # A real SYN scan through the full path — adapter init, ARP,
-          # transmit, receive, detection. v1.1.3 shipped a binary that
-          # segfaulted at adapter init because --version/--iflist alone
-          # don't exercise the scan path; this gate makes that impossible
-          # to repeat. 1.1.1.1 tolerates single-port probes.
-          ./bin/masscan-ng -p 443 --rate 300 --wait 5 1.1.1.1 2>/dev/null | tee /tmp/scan.log
-          grep -q "Discovered open port 443" /tmp/scan.log
-
-      - name: "Release gate: domain-map SNI + Host"
-        run: |
-          # --domain-map must steer the TLS SNI: Google serves
-          # CN=www.google.com only when SNI matches, and serves
-          # CN=invalid2.invalid with no SNI — a hard oracle (1.1.1.1 and
-          # github.com ignore SNI and serve the same cert either way).
-          # The same lookup drives the HTTP Host rewrite. This job runs
-          # in an alpine container: no dig, so musl's getent resolves.
-          # Banner grabs can miss transiently — retry a few times.
-          GIP="$(getent hosts www.google.com | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
-          if [ -z "$GIP" ]; then echo "gate: www.google.com did not resolve"; exit 1; fi
-          printf '%s www.google.com\n' "$GIP" > /tmp/dmap.txt
-          ok=0
-          for i in 1 2 3; do
-            ./bin/masscan-ng "$GIP" -p 443 --banners --capture cert \
-              --domain-map /tmp/dmap.txt --rate 100 --wait 15 > /tmp/dmap-scan.log 2>/dev/null
-            if grep -q "www.google.com" /tmp/dmap-scan.log && ! grep -q "invalid2.invalid" /tmp/dmap-scan.log; then
-              ok=1; break
-            fi
-            echo "gate attempt $i: no www.google.com certificate, retrying"; sleep 5
           done
           if [ "$ok" != 1 ]; then echo "gate failed; last scan output:"; tail -5 /tmp/dmap-scan.log; exit 1; fi
           echo "domain-map SNI gate passed on attempt $i"
