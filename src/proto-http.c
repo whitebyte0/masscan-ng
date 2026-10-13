@@ -686,13 +686,19 @@ static void http_transmit_hello(const struct Banner1 *banner1,
     ipaddress_formatted_t fmt;
     const char *host_value;
 
-    /* --domain-map wins: the scanned address may belong to a domain
-     * (vhost), in which case Host must be the name, not the IP. */
-    if (banner1->domain_map != NULL) {
+    /* Precedence: an explicit --http-host (operator intent) beats the
+     * --domain-map entry (derived from resolution), which beats the
+     * target IP. Without that, the per-connection rewrite would clobber
+     * the static hello's Host set by --http-host at startup. */
+    if (banner1->http_host_override != NULL) {
+      host_value = banner1->http_host_override;
+    } else if (banner1->domain_map != NULL) {
       host_value = domainmap_lookup(banner1->domain_map, &pstate->ip);
-    } else
-      host_value = NULL;
-    if (host_value == NULL) {
+      if (host_value == NULL) {
+        ipaddress_fmt(&fmt, &pstate->ip);
+        host_value = fmt.string;
+      }
+    } else {
       ipaddress_fmt(&fmt, &pstate->ip);
       host_value = fmt.string;
     }

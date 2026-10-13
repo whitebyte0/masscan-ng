@@ -48,6 +48,7 @@ struct Banner1 {
   unsigned is_regex_only_banners : 1;
   unsigned is_dynamic_set_host : 1;
   const struct DomainMap *domain_map; /* NULL unless --domain-map */
+  const char *http_host_override;     /* --http-host beats domain-map */
 
   pcre *regex;
   pcre_extra *regex_extra;

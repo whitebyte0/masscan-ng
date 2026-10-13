@@ -716,6 +716,11 @@ static void ssl_transmit_init(const struct Banner1 *banner1,
         sizeof(struct ProtocolState));
     goto error2;
   }
+  /* The HTTP hello rides this sub-state after the handshake; it needs
+   * the real target address or the Host rewrite (domain-map or IP
+   * fallback) resolves against 0.0.0.0. */
+  psub_state->ip = pstate->ip;
+  psub_state->port = pstate->port;
 
   rbio = BIO_new(BIO_s_mem());
   if (rbio == NULL) {

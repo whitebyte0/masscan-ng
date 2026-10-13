@@ -374,6 +374,11 @@ void tcpcon_set_domain_map(struct TCP_ConnectionTable *tcpcon,
   tcpcon->banner1->domain_map = map;
 }
 
+void tcpcon_set_http_host_override(struct TCP_ConnectionTable *tcpcon,
+                                   const char *host) {
+  tcpcon->banner1->http_host_override = host;
+}
+
 void tcpcon_set_regexp(struct TCP_ConnectionTable *tcpcon, pcre *re,
                        pcre_extra *re_extra, unsigned is_regex_only_banners) {
   tcpcon->banner1->regex = re;

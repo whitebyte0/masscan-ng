@@ -688,6 +688,10 @@ void receive_thread(void *v) {
       tcpcon_set_domain_map(
           threads_handle_recv[iter_recv_handle_thread].tcpcon,
           masscan->domain_map);
+      if (masscan->http.host != NULL)
+        tcpcon_set_http_host_override(
+            threads_handle_recv[iter_recv_handle_thread].tcpcon,
+            masscan->http.host);
 
       tcpcon_init_banner1(threads_handle_recv[iter_recv_handle_thread].tcpcon);
       udpcon_init_banner1(threads_handle_recv[iter_recv_handle_thread].udpcon);
